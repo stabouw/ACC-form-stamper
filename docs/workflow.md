@@ -96,16 +96,22 @@ niet. Vandaar een expliciete keuze per run.
 
 ## Open punten
 
+Zie `api-notes.md` voor de API-kant in detail. In het kort:
+
 - **Richting van de relatiezoekopdracht.** `BatchFormCreator` zoekt vanaf de
   asset (`domain=autodesk-bim360-asset`). Wij hebben de omgekeerde richting
   nodig. Werkt dat niet, dan bouwen we eenmalig een index asset → formulieren
   en draaien we die om. Moet geverifieerd worden.
-- **API-details onbevestigd.** De Autodesk-documentatie was tijdens het opstellen
-  niet bereikbaar (403 via de netwerkproxy). Statuswaarden, welke velden
-  patchbaar zijn, scope-namen, de assets- en categorieën-endpoints en de
-  8000-tekengrens zijn nog niet tegen de documentatie gecontroleerd.
+- **API-details onbevestigd.** Statuswaarden, de endpoints voor
+  statusovergangen, scope-namen, de assets- en categorieën-endpoints en de
+  8000-tekengrens zijn niet tegen de documentatie gecontroleerd; die was niet
+  bereikbaar vanuit de ontwikkelomgeving.
 - **Ongedaan maken en status.** Zet een terugdraaiactie ook de status terug, of
   alleen de notities?
 - **Tekst onder de markering.** Typt een gebruiker iets ónder het blok, dan gaat
   dat verloren bij de volgende run. Bewust geaccepteerd, maar het hoort in de
   gebruikersuitleg.
+
+Wél al bevestigd: `notes` is patchbaar via `PATCH` met
+`projectId` + `templateId` + `formId` — dat doet `BatchFormCreator` in
+productie. De schrijfactie zelf is daarmee geen risico meer.
