@@ -77,6 +77,115 @@ rij minimaal:
 
 `projectId` staat zowel in de React-props als in de URL.
 
+## Bewezen tegen de echte API (26-07-2026)
+
+Met de extensie, 3-legged aangemeld, tegen project `948dda3b` op
+`acc.autodesk.eu`. Dit is geen documentatie meer maar waarneming.
+
+### Zoeken vanaf de formulierkant werkt
+
+`GET relationships:search` met `domain=autodesk-construction-form&type=form`
+levert relaties op — tien in dit project, zonder dat er een formulier-id is
+meegegeven. Daarmee is de grootste openstaande aanname van het ontwerp bevestigd:
+we hoeven niet vanaf de asset te zoeken en er komt geen omgekeerde index.
+
+`GET utility/relationships:writable` noemt `autodesk-construction-form` met
+entiteitstype `form` ook expliciet, naast `autodesk-construction-photo` en de
+bekende bim360-domeinen.
+
+`containerId` = de `projectId` uit de ACC-URL, zonder `b.`-voorvoegsel. Bevestigd.
+
+### Het stempel is onzichtbaar op het formulier, maar wél vindbaar
+
+Waargenomen op formulier #2, sjabloon *Lichtmasten plaatseen*:
+
+- Het sjabloon heeft **geen notitieblok aangezet**. Op het formulier zelf is
+  nergens te zien dat er iets in `notes` staat.
+- In het formulieroverzicht op **Filters → Opmerkingen** zoeken op
+  `gekoppelde assets (26-07-2026)` levert het formulier gewoon op.
+
+Twee conclusies, en de eerste is goed nieuws:
+
+1. **Forma Build doorzoekt `notes`.** Daarmee is de openstaande vraag beantwoord:
+   we stempelen het juiste veld, niet `description`. Het filter heet in de
+   Nederlandse interface *Opmerkingen*.
+2. **Of de tekst zichtbaar is, hangt af van het sjabloon.** Staat het
+   notitieblok uit, dan schrijft de tool in een veld dat de gebruiker nooit
+   onder ogen krijgt. Het filteren werkt, het nalezen niet.
+
+Dat tweede punt is geen storing — het is precies het doel van de tool — maar het
+moet wel uitgelegd worden. Zie de meldingseis in `ux-brief.md`.
+
+Nog niet uitgezocht: of via `include=layoutInfo` op `GET forms` v2 te zien is of
+een sjabloon het notitieblok aan heeft staan. Kan dat, dan kan het
+voorbeeldscherm per formulier melden of de tekst zichtbaar wordt of niet.
+
+### ACC toont categoriepaden met `>`
+
+In het referentiepaneel van een formulier staan de gekoppelde assets als:
+
+```
+cc
+C > CC
+```
+
+Wij schrijven `cc (C > CC)` — hetzelfde scheidingsteken, zodat het stempel leest
+als de rest van de interface. Dit bevestigt bovendien dat de opgebouwde paden
+kloppen: ACC komt onafhankelijk van ons op dezelfde categorieën uit.
+
+### Een formulier hangt aan méér dan assets alleen
+
+De tien gevonden relaties in dit project:
+
+| Andere kant | Wat het is |
+|---|---|
+| `autodesk-bim360-asset/asset` | een asset — dit zoeken we |
+| `autodesk-bim360-asset/**system**` | géén asset, wel hetzelfde domein |
+| `autodesk-construction-schedule/task` | een planningstaak |
+
+**Filter daarom op domein én type.** Kijk je alleen naar het domein, dan glipt
+een `system`-id erdoor als was het een asset. Dat valt niet op: onbekende id's
+worden door `assets:batch-get` zonder foutmelding weggelaten, dus het formulier
+lijkt gewoon een asset te hebben die vervolgens nergens meer opduikt.
+
+De volgorde van de twee entiteiten ligt inderdaad niet vast — in dezelfde tien
+relaties staat het formulier soms voorop en soms achteraan. Match dus nooit op
+positie.
+
+Eén formulier kan aan meerdere assets hangen (`a66afd32` heeft er drie), en één
+asset aan meerdere formulieren (`e6bac120` hangt aan drie). Beide richtingen zijn
+dus n-op-n.
+
+### De BIM 360-API moet aan staan op de APS-app
+
+Zolang die uit stond, gaf **elke** aanroep naar de relatieservice een 403 — ook
+`utility/relationships:writable`, die helemaal geen container aanraakt. Dat is
+het herkenningspunt: gaat álles stuk inclusief `writable`, dan ligt het aan de
+app en niet aan rechten, container of regio.
+
+De relatieservice hoort bij de BIM 360-API, de formulieren en assets bij de
+ACC-API. Die staan los van elkaar in de app-instellingen. Formulieren ophalen kan
+dus prima werken terwijl relaties consequent weigeren.
+
+### `x-ads-region` is verplicht, niet optioneel
+
+Op de EU-tenant, dezelfde aanroep drie keer:
+
+| Regio-header | Uitkomst |
+|---|---|
+| `EMEA` | **200** |
+| *weggelaten* | 403 — `AUTH-001`, "the client_id specified does not have access" |
+| `US` | 403 — "no permission to execute this action on the container" |
+
+De documentatie zegt dat de aanvraag zonder header "automatisch gerouteerd"
+wordt. Op een container in EMEA klopt dat niet: dan krijg je een foutmelding die
+naar de app-registratie wijst en je op het verkeerde spoor zet.
+
+`utility/relationships:writable` werkt wél met elke regio, omdat daar geen
+container aan te pas komt. Handig als controlepunt, misleidend als maatstaf.
+
+Kortom: stuur `x-ads-region` op elke container-aanroep. `FormaClient` doet dat.
+
 ## Gecontroleerd tegen de documentatie (26-07-2026)
 
 ### De richting van de relatiezoekopdracht is geen probleem
@@ -203,10 +312,16 @@ dat is wat een terugdraaiactie moet kunnen terugschrijven.
 
 | | |
 |---|---|
-| `GET /construction/assets/v2/projects/:projectId/assets` | `data:read`. Levert o.a. `name`, `clientAssetId`, `categoryId`. Paging via `cursorState`. |
+| `GET /construction/assets/v2/projects/:projectId/assets` | `data:read`. Levert o.a. `clientAssetId`, `categoryId`, `description`. Paging via `cursorState`. |
 | `GET /construction/assets/v1/projects/:projectId/categories` | `data:read`. Levert `id`, `name`, `parentId`. |
 
 Let op dat assets op **v2** zitten en categorieën op **v1**.
+
+**Een asset heeft geen `name`-veld.** De naam die de gebruiker kent, staat in
+`clientAssetId`: *"This value appears as 'Asset ID' in the Assets UI, and may
+sometimes be called 'Name' in asset exports."* Er is daarnaast een
+`description` (max 1000 tekens), maar dat is niet de naam. In het stempel
+gebruiken we `clientAssetId`.
 
 Er is geen kant-en-klaar padveld: het categoriepad bouw je door `parentId` omhoog
 te volgen tot de wortel. Eenmalig de hele boom ophalen en omzetten naar
@@ -230,11 +345,19 @@ uit de ontwerpfase.
 - **Of `GET forms` v2 stabiel genoeg is.** In de referentie staat die nog als
   "New - Beta" terwijl v1 al "Deprecated" heet. We bouwen op v2; houd er
   rekening mee dat het contract nog kan schuiven.
-- **Of `autodesk-construction-form` in de zoekrichting werkt.** Het domeinpaar is
-  bewezen bij het *aanmaken* van een relatie; de gedocumenteerde domeinlijst
-  noemt formulieren niet (die lijst is naar eigen zeggen onvolledig). De
-  symmetrie van de API maakt het waarschijnlijk, maar één testaanroep is genoeg
-  om het zeker te weten.
+- ~~Of `autodesk-construction-form` in de zoekrichting werkt.~~ **Bewezen** —
+  zie hierboven.
+- ~~Of Forma Build op `notes` of op `description` zoekt.~~ **`notes`** — het
+  filter *Opmerkingen* vindt een gestempeld formulier terug. Zie hierboven.
+
+Terzijde, uit de formulier-URL af te lezen:
+
+```
+/field-reports/<templateId>/reports/<formId>
+```
+
+Handig voor het testen: zo heb je beide id's die de `PATCH` nodig heeft zonder
+een lijstaanroep te doen.
 
 ## Hoe dit gecontroleerd is
 

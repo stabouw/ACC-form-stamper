@@ -19,13 +19,19 @@ markeringsregel → machinegedeelte.
 Controle uitgevoerd op 12-3, klep vervangen.
 
 --- gekoppelde assets (26-07-2026) ----
-asset A (1->Ba->24), asset B (1->Ba->23)
+bb (B > BB), cc (C > CC)
 ```
 
 Regels:
 
 - Eén item per gekoppelde asset: `<assetnaam> (<volledig categoriepad>)`.
-  Padsegmenten met `->`, items met `, `.
+  Padsegmenten met ` > `, items met `, `. Dat eerste is geen willekeurige keuze:
+  ACC toont de categorie van een asset zelf ook als `C > CC`.
+- De assetnaam is het veld `clientAssetId` — dat is wat in ACC als "Asset ID"
+  op het scherm staat. Assets hebben geen apart `name`-veld.
+- De onzichtbare wortelcategorie blijft uit het pad. ACC hangt alles onder één
+  wortel die nergens in de interface voorkomt; die zou bij elke asset dezelfde
+  betekenisloze eerste stap opleveren.
 - Assets in een vaste volgorde (op naam), zodat herhaald draaien dezelfde string
   oplevert.
 - Alles bóven de markering is van de gebruiker en wordt nooit aangeraakt. Alles
@@ -40,7 +46,7 @@ overschrijding, in deze volgorde:
 
 1. Volledig formaat.
 2. Bovenliggende categorieën weglaten, alleen het laatste niveau:
-   `asset A (24), asset B (23)`.
+   `bb (BB), cc (CC)`.
 3. Lijst inkorten en afsluiten met `(+7 meer)`.
 
 Bevestigd in de referentie: `notes` heeft `Max length: 8000`. Het stempel gaat in

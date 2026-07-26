@@ -24,6 +24,7 @@ in deze repo.
 | [`docs/workflow.md`](docs/workflow.md) | Wat de tool doet: stempelformaat, de gemaakte keuzes, en waarom |
 | [`docs/api-notes.md`](docs/api-notes.md) | Wat we van de APS/ACC-API weten — met per punt of het bewezen of aangenomen is |
 | [`docs/ux-brief.md`](docs/ux-brief.md) | Schermen, toestanden en gebruikersinvoer — startpunt voor het ontwerp |
+| [`src/aps/`](src/aps/) | De APS-koppeling: aanmelden en de REST-aanroepen |
 | [`poc/selection-probe/`](poc/selection-probe/) | Meetinstrument: kan de extensie de selectie uit de ACC-UI lezen? |
 | [`.claude/skills/`](.claude/skills/) | `aps-docs` en `aps-sdk-openapi` — hiermee zoek je de APS-referentie op in plaats van te gokken |
 

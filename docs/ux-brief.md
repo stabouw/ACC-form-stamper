@@ -145,6 +145,30 @@ apart weg als "8 formulieren zijn al bijgewerkt — geen wijziging nodig",
 ingeklapt. Ze zijn geruststellend om te kunnen zien, maar ze leiden af van de
 rijen waar het werkelijk om gaat.
 
+**Verplichte melding: de tekst is onzichtbaar, maar wel vindbaar**
+
+Dit scherm moet uitleggen wat het stempel wél en niet doet. Waargenomen in de
+praktijk: bij een sjabloon zonder notitieblok komt de tekst nergens op het
+formulier te staan, terwijl het formulier daarna wel te vinden is via
+**Filters → Opmerkingen** in het formulieroverzicht.
+
+Zonder die uitleg gaat de gebruiker op het formulier kijken, ziet niets, en
+concludeert dat de tool niet werkt. Of erger: hij stempelt nog een keer.
+
+Eén regel volstaat, zoiets als:
+
+> De assets komen in het notitieveld. Afhankelijk van het sjabloon is dat veld
+> niet zichtbaar op het formulier zelf — je vindt de formulieren daarna terug via
+> **Filters → Opmerkingen** in het overzicht.
+
+Toon die vaste tekst bij het voorbeeld, en herhaal hem op het resultaatscherm.
+Daar is het namelijk het moment waarop iemand gaat controleren of het gelukt is.
+
+Als later blijkt dat via `include=layoutInfo` per sjabloon op te vragen is of het
+notitieblok aan staat (zie `api-notes.md`), maak er dan een signaal per rij van
+in plaats van een algemene mededeling. Dat is preciezer, maar de algemene tekst
+is sowieso nodig.
+
 **Signalen die een rij kan hebben:**
 
 | Signaal | Betekenis | Gevolg |
