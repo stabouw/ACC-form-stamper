@@ -23,7 +23,9 @@ in deze repo.
 |---|---|
 | [`docs/workflow.md`](docs/workflow.md) | Wat de tool doet: stempelformaat, de gemaakte keuzes, en waarom |
 | [`docs/api-notes.md`](docs/api-notes.md) | Wat we van de APS/ACC-API weten — met per punt of het bewezen of aangenomen is |
+| [`docs/ux-brief.md`](docs/ux-brief.md) | Schermen, toestanden en gebruikersinvoer — startpunt voor het ontwerp |
 | [`poc/selection-probe/`](poc/selection-probe/) | Meetinstrument: kan de extensie de selectie uit de ACC-UI lezen? |
+| [`.claude/skills/`](.claude/skills/) | `aps-docs` en `aps-sdk-openapi` — hiermee zoek je de APS-referentie op in plaats van te gokken |
 
 ## Waar het nu staat
 
@@ -45,10 +47,11 @@ bijwerken, en beide staan er dus al.
 2. **`uid` verifiëren.** Open één formulier in ACC en vergelijk de GUID in de
    adresbalk met de `uid` uit het rapport. Er zitten meerdere id-achtige velden
    in een rij, waaronder PlanGrid-interne sleutels.
-3. **Documentatie ontsluiten.** `*.autodesk.com` en `*.autodesk.eu` zijn
-   geblokkeerd in de omgeving waar dit is opgesteld, dus de API-laag is nu
-   deels afgeleid in plaats van opgezocht. Zie de laatste paragraaf van
-   `api-notes.md`.
+3. **Eén API-vraag beantwoorden.** De documentatie is ontsloten en verwerkt in
+   `api-notes.md`: de richting van de relatiezoekopdracht bleek geen probleem, en
+   het stempelveld `notes` heeft inderdaad een grens van 8000 tekens. Wat
+   overblijft is één vraag die je alleen met een testaanroep beantwoordt: kan een
+   gesloten formulier via de API heropend worden? Zo niet, dan vervalt die optie.
 4. **Kern eerst bouwen.** De stempellogica — het afgeschermde blok, het opbouwen
    van categoriepaden, de afbouwladder bij 8000 tekens — hangt van geen van
    bovenstaande af en is los te schrijven en te testen.

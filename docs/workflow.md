@@ -35,13 +35,16 @@ Regels:
 
 ### Limiet van 8000 tekens
 
-Het stempel deelt de 8000 tekens met de bewaarde gebruikersnotities. Bij
+Het stempel deelt de beschikbare ruimte met de bewaarde gebruikersnotities. Bij
 overschrijding, in deze volgorde:
 
 1. Volledig formaat.
 2. Bovenliggende categorieën weglaten, alleen het laatste niveau:
    `asset A (24), asset B (23)`.
 3. Lijst inkorten en afsluiten met `(+7 meer)`.
+
+Bevestigd in de referentie: `notes` heeft `Max length: 8000`. Het stempel gaat in
+`notes` — niet in `description`, dat een eigen veld met dezelfde grens is.
 
 ### Datum in de markering
 
@@ -62,7 +65,8 @@ De markering bevat een datum, dus:
    extensie leest die selectie. Zie `poc/selection-probe` — dit moet eerst
    bewezen worden.
 2. **Verrijken** — per formulier de gekoppelde assets ophalen via de
-   Relationship API, daarna assetnamen en categorie-id's, en categorie-id's naar
+   Relationship API (`relationships:intersect`, batches van maximaal 20),
+   daarna assetnamen en categorie-id's via `GET assets`, en categorie-id's naar
    volledige paden via de eenmalig opgehaalde categorieboom.
 3. **Voorbeeld** — tabel `formulier → huidige notities → voorgestelde notities`,
    met de gewijzigde regio gemarkeerd. Er is nog niets geschreven. Formulieren
@@ -84,6 +88,8 @@ De markering bevat een datum, dus:
 | Gesloten formulieren | Per run aan te zetten, standaard uit, met bevestiging van het aantal |
 | Auth | 3-legged (PKCE), eigen APS-app |
 | Client | Edge-extensie |
+| Forms-API | v2 voor het ophalen; v1 voor de `PATCH`, want daar is geen v2 van |
+| Stempelveld | `notes` (max 8000), niet `description` |
 
 ### Waarom gesloten formulieren standaard uit staan
 
@@ -98,20 +104,29 @@ niet. Vandaar een expliciete keuze per run.
 
 Zie `api-notes.md` voor de API-kant in detail. In het kort:
 
-- **Richting van de relatiezoekopdracht.** `BatchFormCreator` zoekt vanaf de
-  asset (`domain=autodesk-bim360-asset`). Wij hebben de omgekeerde richting
-  nodig. Werkt dat niet, dan bouwen we eenmalig een index asset → formulieren
-  en draaien we die om. Moet geverifieerd worden.
-- **API-details onbevestigd.** Statuswaarden, de endpoints voor
-  statusovergangen, scope-namen, de assets- en categorieën-endpoints en de
-  8000-tekengrens zijn niet tegen de documentatie gecontroleerd; die was niet
-  bereikbaar vanuit de ontwikkelomgeving.
+- **Kan een gesloten formulier via de API heropend worden?** Het ontwerp gaat
+  ervan uit van wel. De referentie zegt dat gesloten formulieren "no longer
+  editable" zijn, zonder te vermelden of dat ook voor het statusveld zelf geldt.
+  Werkt het niet, dan vervalt de hele optie "gesloten formulieren meenemen" —
+  en daarmee ook de zorg hieronder over "gesloten door". Eén testformulier
+  volstaat om dit te beslissen.
 - **Ongedaan maken en status.** Zet een terugdraaiactie ook de status terug, of
   alleen de notities?
 - **Tekst onder de markering.** Typt een gebruiker iets ónder het blok, dan gaat
   dat verloren bij de volgende run. Bewust geaccepteerd, maar het hoort in de
   gebruikersuitleg.
 
-Wél al bevestigd: `notes` is patchbaar via `PATCH` met
-`projectId` + `templateId` + `formId` — dat doet `BatchFormCreator` in
-productie. De schrijfactie zelf is daarmee geen risico meer.
+Afgevallen: de **richting van de relatiezoekopdracht** is geen open punt meer.
+De relatieservice is bi-directioneel en de zoekparameters zijn symmetrisch, dus
+formulier → assets werkt net zo goed als andersom. De omgekeerde index als
+terugvaloptie is niet nodig.
+
+Ook bevestigd: `notes` is patchbaar via `PATCH` met `projectId` + `templateId` +
+`formId` — dat doet `BatchFormCreator` in productie, en de referentie bevestigt
+de route. De schrijfactie zelf is daarmee geen risico meer.
+
+**We bouwen op Forms v2.** Let op dat v2 alleen `GET forms` en
+`PUT values:batch-update` dekt — de `PATCH` waarmee wij schrijven, bestaat alleen
+in v1. De tool gebruikt dus beide versies naast elkaar, en de statuswaarden
+verschillen ertussen (`inProgress` bij het lezen, `draft` bij het schrijven).
+Zie `api-notes.md` voor de vertaaltabel.
