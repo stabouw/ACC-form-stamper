@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "ACC Form Stamper",
+  "version": "0.1.0",
+  "description": "Zet de gekoppelde assets van een ACC-formulier in het notitieveld, zodat je in Forma Build op assetnaam en categorie kunt filteren.",
+
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxUR43QL02f/9suZkpsoFZ5BRPnADD9thB8yGNurQgEDjfX/TrFtYAwcvr4NJ0wxvBlkJCRR4cudfMRTR00cPz6+otAwhoxAFef2X1gEpc1J1cMkU0lTAWBzhft/RoprbvBCMLp/0AS6i++uyrRJb9gTrunvoLkH31IYTX5xNUGVYLRFmUY3cvcNgE5hmagL7gwhAnbd0WJahPtwppuinUTjCndXJay05bSQ41gYYBAe32/iY0ITCEISWVBpeqsF75Zux9yPZE7Mje+hBIHNeyvHnCNdSYGKsocwufD9mJ75eEbzJB/obvHJgOe/f+CRL/WWo7vPe/Nw5B19VRWiKvQIDAQAB",
+
+  "permissions": ["identity", "storage"],
+
+  "host_permissions": [
+    "https://developer.api.autodesk.com/*",
+    "https://acc.autodesk.com/*",
+    "https://acc.autodesk.eu/*"
+  ],
+
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+
+  "action": {
+    "default_title": "ACC Form Stamper"
+  }
+}
