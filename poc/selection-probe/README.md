@@ -20,6 +20,15 @@ hosts in `manifest.json` bij `host_permissions` én `content_scripts.matches`.
 
 ## Wat te doen
 
+**Meting 0 — tabel** (belangrijkste)
+
+1. Vink 2 tot 3 formulieren aan.
+2. Klik **Probe tabel** → **Kopieer** → plak terug in de chat.
+
+Dit leest de TanStack-tabelinstantie uit: de selectiestatus, de rij-objecten en
+de veldnamen daarin. Werkt dit, dan hoeft de echte extensie de DOM helemaal niet
+aan te raken.
+
 **Meting 1 — selectie**
 
 1. Vink 2 tot 3 formulieren aan in de lijst.
@@ -55,6 +64,28 @@ Waar het rapport op uit is:
 - `getRequests` — welke API-calls de pagina zelf doet en of de antwoorden
   GUID's bevatten. Als de lijst via een aanroep binnenkomt die we kunnen
   meelezen, hebben we de id's zonder de DOM aan te raken.
+
+## Wat we tot nu toe weten
+
+Uit de eerste meting (26-07-2026, `acc.autodesk.eu`, route
+`/build/forms/projects/<id>/field-reports/all`):
+
+- De formulierenlijst is een **TanStack Table**. De rij-objecten staan in
+  `table.options.data`.
+- Per rij zijn aanwezig: `uid` (v4 GUID, vermoedelijk de formulier-id), `type`
+  (v5 GUID, vermoedelijk de template-id — twee rijen met hetzelfde
+  formuliertype deelden deze waarde, en de template-id's in
+  `BatchFormCreator` zijn eveneens v5), plus `pg_form.id` en
+  `pg_form.layoutId`.
+- De `projectId` zit in de props én in de URL.
+- De selectievakjes in de kop tellen mee als "aangevinkt": de kopregel meldt
+  `aria-checked="mixed"` bij een gedeeltelijke selectie. Bij 2 geselecteerde
+  formulieren vond de probe er 3. Die moet er dus uit gefilterd worden — of we
+  vermijden de DOM helemaal en lezen de tabelinstantie.
+
+Nog te bevestigen: dat `uid` daadwerkelijk de formulier-id is die de publieke
+API verwacht. Open één formulier in ACC en vergelijk de GUID in de adresbalk met
+de `uid` uit het rapport.
 
 ## Hoe dit verder gaat
 

@@ -272,6 +272,99 @@
     return out;
   }
 
+  // ---------------------------------------------------------------------------
+  // TanStack Table instance
+  // ---------------------------------------------------------------------------
+
+  /**
+   * The Forms list is a TanStack Table. Its instance carries the selection state
+   * and the underlying row objects, which is a far more stable place to read
+   * from than checkbox markup or row ordering. Walk the fiber chain from the
+   * table (or a checkbox) looking for props holding an object with getState().
+   */
+  function findTanstackTable() {
+    const seeds = [
+      document.querySelector('table'),
+      ...Array.from(document.querySelectorAll('input[type="checkbox"]')).slice(0, 3),
+    ].filter(Boolean);
+
+    for (const seed of seeds) {
+      let fiber = reactFiberOf(seed);
+      let level = 0;
+      while (fiber && level < 30) {
+        const props = fiber.memoizedProps;
+        const candidate = props && props.table;
+        if (candidate && typeof candidate.getState === 'function') {
+          return { table: candidate, level, seed: seed.tagName.toLowerCase() };
+        }
+        fiber = fiber.return;
+        level += 1;
+      }
+    }
+    return null;
+  }
+
+  function probeTable() {
+    const found = findTanstackTable();
+    if (!found) {
+      return { error: 'geen TanStack table-instantie gevonden vanaf <table> of een checkbox' };
+    }
+
+    const { table } = found;
+    const out = { foundVia: found.seed, fiberLevel: found.level };
+
+    out.tableMethods = Object.keys(table)
+      .filter((k) => typeof table[k] === 'function')
+      .sort();
+
+    try {
+      out.state = summarize(table.getState(), 0, 3);
+    } catch (err) {
+      out.stateError = String(err && err.message);
+    }
+
+    // Raw, not summarised: the keys are what tell us whether selection is keyed
+    // by form uid or by row index.
+    try {
+      out.rowSelectionRaw = table.getState().rowSelection;
+    } catch (err) {
+      out.rowSelectionError = String(err && err.message);
+    }
+
+    try {
+      const rows = table.getSelectedRowModel().rows;
+      out.selectedRows = {
+        count: rows.length,
+        samples: rows.slice(0, 5).map((r) => ({
+          id: r.id,
+          index: r.index,
+          original: summarize(r.original, 0, 2),
+        })),
+      };
+    } catch (err) {
+      out.selectedRowsError = String(err && err.message);
+    }
+
+    try {
+      const data = table.options.data || [];
+      out.data = { length: data.length, firstRow: summarize(data[0], 0, 3) };
+      out.getRowId =
+        typeof table.options.getRowId === 'function'
+          ? String(table.options.getRowId).slice(0, 300)
+          : '(niet gezet — rij-id is dan de index)';
+    } catch (err) {
+      out.dataError = String(err && err.message);
+    }
+
+    try {
+      out.visibleRowCount = table.getRowModel().rows.length;
+    } catch {
+      /* optional */
+    }
+
+    return out;
+  }
+
   /**
    * Finds elements that look like a selected row, using several independent
    * strategies so we learn which one ACC actually uses.
@@ -279,9 +372,18 @@
   function probeSelection() {
     const strategies = {};
 
-    const checked = Array.from(document.querySelectorAll('input[type="checkbox"]')).filter((i) => i.checked);
+    const allChecked = Array.from(document.querySelectorAll('input[type="checkbox"]')).filter((i) => i.checked);
+
+    // The select-all box in the header reports checked with aria-checked="mixed"
+    // (or "true" when everything is selected), so it has to be excluded before
+    // the count means anything. Row boxes live outside <thead>.
+    const checked = allChecked.filter(
+      (i) => i.getAttribute('aria-checked') !== 'mixed' && !i.closest('thead'),
+    );
+
     strategies.checkedCheckboxes = {
-      count: checked.length,
+      countIncludingHeader: allChecked.length,
+      countRowsOnly: checked.length,
       samples: checked.slice(0, 3).map(describeElement),
     };
 
@@ -351,6 +453,8 @@
     try {
       if (data.action === 'probeSelection') {
         payload = probeSelection();
+      } else if (data.action === 'probeTable') {
+        payload = probeTable();
       } else if (data.action === 'getRequests') {
         payload = requests.map((r) => ({
           ...r,

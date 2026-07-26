@@ -54,9 +54,10 @@
         Selecteer eerst een paar formulieren in de lijst, klik dan op <em>Probe selectie</em>.
       </p>
       <div class="acc-probe-actions">
+        <button type="button" data-act="table">Probe tabel</button>
         <button type="button" data-act="selection">Probe selectie</button>
         <button type="button" data-act="network">Netwerk log</button>
-        <button type="button" data-act="copy">Kopieer rapport</button>
+        <button type="button" data-act="copy">Kopieer</button>
       </div>
       <textarea class="acc-probe-out" readonly placeholder="Rapport verschijnt hier…"></textarea>
     </div>
@@ -84,11 +85,16 @@
         await navigator.clipboard.writeText(out.value);
         event.target.textContent = 'Gekopieerd';
         setTimeout(() => {
-          event.target.textContent = 'Kopieer rapport';
+          event.target.textContent = 'Kopieer';
         }, 1500);
       } catch {
         document.execCommand('copy');
       }
+      return;
+    }
+
+    if (act === 'table') {
+      show('TABEL', await ask('probeTable'));
       return;
     }
 
