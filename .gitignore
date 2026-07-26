@@ -1,0 +1,5 @@
+# Privésleutel van de extensie — hoort niet in git.
+# De publieke helft staat als "key" in src/manifest.json en legt het extensie-id vast.
+*.pem
+
+node_modules/
