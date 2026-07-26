@@ -1,0 +1,87 @@
+/* Deliberately plain — this is a throwaway diagnostic, not the product UI. */
+
+#acc-probe-panel {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147483647;
+  width: 460px;
+  max-width: calc(100vw - 32px);
+  font: 12px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #111;
+  background: #fff;
+  border: 1px solid #c8c8c8;
+  border-radius: 6px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
+
+#acc-probe-panel .acc-probe-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  font-weight: 600;
+  background: #1f2933;
+  color: #fff;
+}
+
+#acc-probe-panel .acc-probe-head button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  color: #fff;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+#acc-probe-panel.collapsed .acc-probe-body {
+  display: none;
+}
+
+#acc-probe-panel .acc-probe-body {
+  padding: 10px;
+}
+
+#acc-probe-panel .acc-probe-hint {
+  margin: 0 0 8px;
+  color: #52606d;
+}
+
+#acc-probe-panel .acc-probe-actions {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+#acc-probe-panel .acc-probe-actions button {
+  flex: 1;
+  padding: 6px 8px;
+  font: inherit;
+  color: #111;
+  background: #f0f2f4;
+  border: 1px solid #c8c8c8;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+#acc-probe-panel .acc-probe-actions button:hover {
+  background: #e2e6ea;
+}
+
+#acc-probe-panel .acc-probe-out {
+  width: 100%;
+  height: 260px;
+  padding: 8px;
+  font: 11px/1.4 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color: #111;
+  background: #fbfbfb;
+  border: 1px solid #d5d5d5;
+  border-radius: 4px;
+  resize: vertical;
+  box-sizing: border-box;
+}

@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "ACC Form Stamper - selectie probe",
+  "version": "0.1.0",
+  "description": "Diagnostisch hulpmiddel: onderzoekt of en hoe de geselecteerde formulieren in ACC Build uitgelezen kunnen worden.",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://acc.autodesk.com/*",
+    "https://acc.autodesk.eu/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://acc.autodesk.com/*",
+        "https://acc.autodesk.eu/*"
+      ],
+      "js": ["probe-main.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://acc.autodesk.com/*",
+        "https://acc.autodesk.eu/*"
+      ],
+      "js": ["content.js"],
+      "css": ["panel.css"],
+      "run_at": "document_idle",
+      "world": "ISOLATED"
+    }
+  ]
+}
