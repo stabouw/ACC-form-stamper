@@ -65,11 +65,23 @@ button{font-family:inherit}
  * dat blijft in alle vier de stappen gelden. `min-width:0` laat de naam krimpen
  * in plaats van het icoon weg te duwen.
  */
-.title-group{display:flex;align-items:baseline;gap:8px;min-width:0}
+.title-group{display:flex;align-items:center;gap:9px;min-width:0}
+
+/*
+ * De projectnaam: blauw op geel, net als de titel ernaast.
+ *
+ * Hij was te klein om te lezen (11px, en dan ook nog gedempt). Nu op 13px en op
+ * volle kleur — dempen is precies wat op een verzadigd geel vlak niet werkt. Dat
+ * hij ondergeschikt is aan de titel blijkt uit grootte en gewicht, niet uit
+ * doorzichtigheid.
+ */
 .title-group .project{
-  font-size:11px;color:var(--hjm-blue);opacity:.75;
+  font-size:13px;color:var(--hjm-blue);
+  max-width:195px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
+/* Scheidingsteken, zodat titel en projectnaam als één regel lezen. */
+.title-group .project::before{content:"·";margin-right:9px;opacity:.55}
 .icon-badge{width:21px;height:21px;border-radius:50%;background:var(--hjm-blue);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .icon-badge svg{width:12px;height:12px}
 .step-label{padding:9px 15px;font-size:10.5px;font-weight:700;color:var(--hjm-blue);opacity:.55;border-bottom:1px solid var(--hjm-grey-pale);background:#fafafa}

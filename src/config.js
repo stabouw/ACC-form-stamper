@@ -17,6 +17,24 @@ export const APS_CLIENT_ID = 'ywbIFfLmnpejUxLwI5oTW4Ap7GixIDOAoJfAkk11ch4ruNhJ';
 export const ACC_REGION = 'EMEA';
 
 /**
+ * Het ACC-account van Heijmans, oftewel de hub.
+ *
+ * Hub-id en account-id zijn hetzelfde nummer: de hub heet
+ * `b.129f2f98-4635-42b4-8550-6b6087bf0514`, en de Admin-API wil dat zonder het
+ * `b.`-voorvoegsel — net als bij project-id's.
+ *
+ * Wordt nu nergens voor gebruikt: de projectnaam komt van
+ * `GET /construction/admin/v1/projects/:projectId`, en die heeft geen account
+ * nodig. De account-variant (`/accounts/:accountId/projects`) kan alleen
+ * filteren op classificatie, platform en product — niet op project-id — dus
+ * daarmee zou je de hele hub moeten doorbladeren om één naam te vinden.
+ *
+ * Staat hier omdat elke andere Admin-aanroep hem wél nodig heeft, en omdat het
+ * anders elke keer opnieuw uitzoeken is.
+ */
+export const ACC_ACCOUNT_ID = '129f2f98-4635-42b4-8550-6b6087bf0514';
+
+/**
  * De callback-URL die bij Autodesk geregistreerd moet staan.
  *
  *   https://lcelfplffcnfhajffomdelokagjkggnf.chromiumapp.org/

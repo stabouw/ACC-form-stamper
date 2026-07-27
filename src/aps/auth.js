@@ -26,12 +26,15 @@ const REFRESH_MARGIN_MS = 5 * 60 * 1000;
  * Scopes this tool needs, and why:
  *   data:read   relaties, assets, categorieën en de formulierenlijst
  *   data:write  het bijwerken van de notities
+ *   account:read  de projectnaam via de Account Admin-API. Die dienst hangt
+ *                 níét onder data:read — met alleen data:read geeft hij 403,
+ *                 wat op een rechtenprobleem lijkt terwijl het een scope is.
  *   offline_access  levert een refresh token, zodat de gebruiker niet elk uur
  *                   opnieuw hoeft te tekenen. Deze staat niet in de enum van de
  *                   OpenAPI-spec, maar wel in de scope-documentatie; de enum is
  *                   daar niet uitputtend.
  */
-export const DEFAULT_SCOPES = ['data:read', 'data:write', 'offline_access'];
+export const DEFAULT_SCOPES = ['data:read', 'data:write', 'account:read', 'offline_access'];
 
 const STORAGE_KEY = 'aps.tokens';
 
@@ -129,7 +132,27 @@ export class ApsAuth {
   async isSignedIn() {
     const tokens = await this._load();
     if (!tokens) return false;
+    if (!this._scopesVolstaan(tokens)) return false;
     return Boolean(tokens.refreshToken) || tokens.expiresAt > Date.now();
+  }
+
+  /**
+   * Dekt de opgeslagen toekenning alles wat we nú nodig hebben?
+   *
+   * Komt er een scope bij in een nieuwe versie, dan is een token van vóór die
+   * versie te smal. Verversen lost dat niet op: een refresh mag nooit méér
+   * vragen dan er is toegekend, dus die faalt.
+   *
+   * Zonder deze controle blijft dat een uur onzichtbaar — het oude access token
+   * werkt nog, alleen de nieuwe aanroep geeft 403 — en pas daarna volgt een
+   * verlopen-melding die niets met de werkelijke oorzaak te maken lijkt te
+   * hebben. Zo merkt de gebruiker het meteen: één keer opnieuw aanmelden.
+   *
+   * @param {TokenSet} tokens
+   */
+  _scopesVolstaan(tokens) {
+    const toegekend = new Set((tokens.scope ?? '').split(/\s+/).filter(Boolean));
+    return this.scopes.every((scope) => toegekend.has(scope));
   }
 
   /**

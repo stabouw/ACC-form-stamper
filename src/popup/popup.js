@@ -80,24 +80,64 @@ function vraag(type, payload) {
  * normale geval van "je staat op de verkeerde pagina", en het verdient dus die
  * uitleg en niet de foutmelding van de browser.
  */
+const GEEN_PAGINA =
+  'Open het formulieroverzicht van Forma Build en vink daar de formulieren aan ' +
+  'die je wilt stempelen.';
+
+/** Eén poging. Levert `null` als het content script niet antwoordt. */
+function stuurNaarTab(tabId) {
+  return new Promise((resolve) => {
+    chrome.tabs.sendMessage(tabId, { type: 'getSelection' }, (response) => {
+      // `lastError` uitlezen is verplicht, anders logt Chrome hem als
+      // onafgehandelde fout in de console van de popup.
+      if (chrome.runtime.lastError || !response) resolve(null);
+      else resolve(response);
+    });
+  });
+}
+
+/**
+ * Zet de content scripts alsnog in de pagina.
+ *
+ * Nodig omdat scripts uit de manifest alleen bij het laden van een pagina worden
+ * geïnjecteerd. Installeer of herlaad je de extensie terwijl een ACC-tabblad al
+ * open staat, dan heeft dat tabblad ze niet — en dan lijkt het alsof er niets is
+ * aangevinkt, terwijl de lijst vol vinkjes staat.
+ *
+ * Dat was precies het geval na een verse installatie: pas na het verversen van
+ * de pagina werkte het. De gebruiker daarom om een refresh vragen kan, maar het
+ * alsnog injecteren is hetzelfde werk en scheelt hem de vraag.
+ */
+async function injecteerContentScripts(tabId) {
+  try {
+    // Volgorde telt: de brug in de isolated world stelt zijn vragen aan het
+    // MAIN-script, dus dat moet er eerst zijn.
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['content/selection-main.js'],
+      world: 'MAIN',
+    });
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['content/selection.js'],
+    });
+    return true;
+  } catch {
+    // Geen rechten op dit tabblad: dan is het geen ACC-pagina.
+    return false;
+  }
+}
+
 async function vraagSelectie() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) return { ok: false, error: 'Geen actief tabblad gevonden.' };
 
-  return new Promise((resolve) => {
-    chrome.tabs.sendMessage(tab.id, { type: 'getSelection' }, (response) => {
-      if (chrome.runtime.lastError || !response) {
-        resolve({
-          ok: false,
-          error:
-            'Open het formulieroverzicht van Forma Build en vink daar de ' +
-            'formulieren aan die je wilt stempelen.',
-        });
-        return;
-      }
-      resolve(response);
-    });
-  });
+  const eerste = await stuurNaarTab(tab.id);
+  if (eerste) return eerste;
+
+  if (!(await injecteerContentScripts(tab.id))) return { ok: false, error: GEEN_PAGINA };
+
+  return (await stuurNaarTab(tab.id)) ?? { ok: false, error: GEEN_PAGINA };
 }
 
 // -----------------------------------------------------------------------------
@@ -261,13 +301,14 @@ async function laadSelectie() {
 
   staat.projectId = selectie.projectId;
 
-  // De naam komt uit de API, niet van de pagina. Het eerdere gokje op
-  // `document.title` leverde "Build" op — de naam van de module, niet van het
-  // project. Faalt de aanroep, dan blijft de regel gewoon weg.
   const { naam } = await vraag('getProjectNaam', { projectId: selectie.projectId });
   staat.projectNaam = naam;
-  el('project-name').textContent = naam ?? '';
-  el('project-name').hidden = !naam;
+  const naamveld = el('project-name');
+  naamveld.textContent = naam ?? '';
+  // Lange projectnamen worden afgekapt met een beletselteken; de tooltip houdt
+  // de volledige naam bereikbaar.
+  naamveld.title = naam ?? '';
+  naamveld.hidden = !naam;
 
   const ids = selectie.formIds ?? [];
   if (ids.length === 0) {

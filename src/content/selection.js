@@ -11,6 +11,12 @@
 (() => {
   'use strict';
 
+  // Zie selection-main.js: dit script kan ook een tweede keer geïnjecteerd
+  // worden. Een tweede `onMessage`-luisteraar zou twee keer antwoorden op
+  // dezelfde vraag.
+  if (window.__accFormStamperBridge) return;
+  window.__accFormStamperBridge = true;
+
   const CHANNEL = 'acc-form-stamper';
   const pending = new Map();
   let nextId = 1;
@@ -58,9 +64,9 @@
     return match ? match[2] : null;
   }
 
-  // De projectnaam werd hier eerst uit `document.title` gegokt. Dat leverde
-  // "Build" op — de naam van de module, niet van het project. Hij komt nu uit de
-  // Admin-API, via de service worker.
+  // De projectnaam komt uit de API, niet van de pagina: de opmaak van ACC is
+  // niet van ons en verandert zonder aankondiging. Zie `getProjectNaam` in de
+  // service worker.
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type !== 'getSelection') return false;

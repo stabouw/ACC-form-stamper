@@ -165,6 +165,13 @@ export class FormaClient {
    * they are about to stamp. Reading it off the ACC page is not an option: the
    * header markup is not ours and changes without notice.
    *
+   * Two things this endpoint does differently from the rest of this class, both
+   * of which produce a 403 that looks like a permissions problem:
+   *
+   *   - It needs the `account:read` scope. Account Admin does not sit under
+   *     `data:read` the way Forms, Assets and Relationships do.
+   *   - Its region header is called `Region`, not `x-ads-region`.
+   *
    * @param {object} params
    * @param {string} params.projectId
    * @param {AbortSignal} [params.signal]
@@ -174,10 +181,7 @@ export class FormaClient {
     return this._request(
       'GET',
       `${HOST}/construction/admin/v1/projects/${normalizeProjectId(projectId)}`,
-      // De Admin-API routeert per regio. Zonder deze header zoekt hij het project
-      // op de US-tenant en meldt hij netjes dat het niet bestaat — een 404 die op
-      // een rechtenprobleem lijkt terwijl het een adresprobleem is.
-      { region: true, signal, context: 'het ophalen van de projectnaam' },
+      { region: 'Region', signal, context: 'het ophalen van de projectnaam' },
     );
   }
 
@@ -469,9 +473,14 @@ export class FormaClient {
 
     const headers = { Authorization: `Bearer ${await this.auth.getAccessToken()}` };
     if (body !== undefined) headers['Content-Type'] = 'application/json';
-    // Only the relationship service documents this header, and BatchFormCreator
-    // sends it on every relationship call against the EU tenant.
-    if (region) headers['x-ads-region'] = this.region;
+
+    // Region routing exists on more than one service here, under two different
+    // header names — the relationship service wants `x-ads-region`, Account
+    // Admin wants `Region`. Pass `region: true` for the former, or the header
+    // name itself for anything that spells it differently. Getting this wrong
+    // routes the call to the US tenant and returns a 403/404 that reads like a
+    // permissions problem.
+    if (region) headers[region === true ? 'x-ads-region' : region] = this.region;
 
     let response;
     try {

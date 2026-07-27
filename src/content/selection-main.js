@@ -16,6 +16,13 @@
 
   const CHANNEL = 'acc-form-stamper';
 
+  // Dit script kan twee keer binnenkomen: één keer via de manifest bij het laden
+  // van de pagina, en één keer omdat de popup het alsnog injecteert wanneer het
+  // er niet blijkt te zijn. Twee luisteraars zouden elke vraag dubbel
+  // beantwoorden.
+  if (window.__accFormStamperMain) return;
+  window.__accFormStamperMain = true;
+
   /** De React-fiber van een element, ongeacht de React-versie. */
   function reactFiberOf(el) {
     const key = Object.keys(el).find(
