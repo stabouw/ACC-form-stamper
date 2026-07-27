@@ -6,7 +6,7 @@ en assetcategorie — iets wat de Forms-module zelf niet kan.
 
 In de API heet dat veld `notes`; in de Nederlandse interface van ACC heet het
 **Opmerkingen**. De tool gebruikt overal het woord dat de gebruiker op zijn
-scherm ziet.
+scherm ziet. 
 
 Bedoeld voor formulieren die er al staan. Nieuwe formulieren krijgen hun stempel
 bij het aanmaken, via de bestaande Power Automate-flow `BatchFormCreator`.
