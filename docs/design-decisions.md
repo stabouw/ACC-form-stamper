@@ -8,12 +8,17 @@ wat er met dat verschil gebeurt.
 De handoff zelf blijft ongewijzigd — dat is een stuk van het ontwerpteam. Wat
 hieronder staat, is wat de bouw doet waar de handoff zwijgt.
 
-## 1. "Terug" op Selecteren meldt af
+## 1. "Uitloggen" op Selecteren, niet "Terug"
 
 Aanmelden blijft stap 1 van 4, ook al ziet een terugkerende gebruiker dat scherm
-nooit. De ghost-knop "Terug" op Selecteren gaat naar Inloggen en is daarmee de
-afmeldroute. Dat is bewust: wie is aangemeld, moet zich ook kunnen afmelden, en
-een tweede plek daarvoor is er niet.
+nooit. De ghost-knop linksonder op Selecteren is de afmeldroute: wie is
+aangemeld, moet zich ook kunnen afmelden, en een tweede plek daarvoor is er niet.
+
+De handoff tekent daar "Terug". Die knop heet nu **Uitloggen**, en dat scheelt
+een bevestigingsvraag. Met "Terug" was er een tussenvraag nodig — niemand
+verwacht dat "Terug" je sessie beëindigt — en die vraag was niets anders dan een
+pleister op een verkeerd woord. Met het juiste woord op de knop is de vraag
+overbodig, en opnieuw inloggen is geen straf.
 
 ## 2. Geen apart Verrijken-scherm
 
@@ -28,25 +33,43 @@ De status van een formulier komt uit `GET forms` en is dus bekend op Selecteren.
 Hij hoort daar dan ook te staan, niet pas als fout tijdens het stempelen zoals
 `03b-stempelen-fout.html` het tekent.
 
-- Een gesloten formulier krijgt een **gele status-pill onder de formuliernaam**.
+- Een gesloten formulier krijgt een **gele status-pill achter de formuliernaam**.
 - De schakelaar "Ook gesloten formulieren" **verschijnt alleen als er gesloten
-  formulieren in de selectie zitten**, en noemt het aantal. Staan ze er niet, dan
-  is de schakelaar er ook niet — de handoff tekent hem met "0 gesloten
-  formulieren", en die toestand bestaat niet meer.
+  formulieren zijn waar hij ook iets aan verandert**. Staan ze er niet, dan is de
+  schakelaar er ook niet — de handoff tekent hem met "0 gesloten formulieren", en
+  die toestand bestaat niet meer.
+
+Die tweede regel is scherper dan "als er gesloten formulieren in de selectie
+zitten". Een gesloten formulier dat toch al `ongewijzigd` is, wordt met de
+schakelaar aan net zo goed overgeslagen — `wordtGestempeld` sluit `ongewijzigd`
+en `past-niet` sowieso uit. De schakelaar tonen zou dan een onomkeerbare keuze
+voorleggen waar niets tegenover staat: heropenen, niets schrijven, weer sluiten,
+en "gesloten door" en "gesloten op" kwijt. De vraag stellen was zelf de fout.
 
 De onomkeerbaarheid ("gesloten door" en "gesloten op" worden overschreven, zie
 [`workflow.md`](workflow.md)) hoort als uitleg bij die schakelaar te staan.
 
-## 4. Geen gekoppelde assets is een waarschuwing, geen overslaan
+## 4. Geen gekoppelde assets is niet hetzelfde als niets te doen
 
-Een formulier zonder gekoppelde assets krijgt een **gele waarschuwing in de
-kolom "Gekoppelde assets"**.
+Een formulier zonder gekoppelde assets wordt **niet** automatisch overgeslagen.
+Had het formulier eerder wél assets in zijn opmerkingen staan, dan is die
+assetregel nu verouderd en moet hij juist bijgewerkt worden naar leeg. Alleen een
+formulier dat geen assets heeft én geen assetregel in zijn opmerkingen, is
+werkelijk niets te doen.
 
-Belangrijk: dit betekent **niet** dat het formulier overgeslagen wordt. Had het
-formulier eerder wél assets in zijn notities staan, dan is de assetregel nu
-verouderd en moet die juist bijgewerkt worden naar leeg. Alleen een formulier
-dat geen assets heeft én geen assetregel in zijn notities, is werkelijk niets te
-doen.
+Dat onderscheid bepaalt ook hoe het eruitziet, en dat is bij het bouwen bijgesteld:
+
+| Geval | In de kolom |
+|---|---|
+| Geen assets, en ook nooit gestempeld | Gedempte tekst "Geen gekoppelde assets" |
+| Geen assets meer, maar er stond een assetregel | Gele waarschuwing — die regel wordt leeggemaakt |
+
+Eerst kregen ze allebei het gele vlak. In de praktijk heeft een flink deel van de
+formulieren helemaal geen assets, en dan staat de halve tabel vol met een
+waarschuwing voor iets wat niet gebeurt. `ux-brief.md` zegt het al: *"wees zuinig
+met waarschuwen — als alles een uitroepteken krijgt, valt de ene rij waar het
+echt om gaat niet meer op."* Het geel is nu voorbehouden aan het enige geval
+waarin er werkelijk iets verdwijnt.
 
 ## 5. "Limiet" is twee verschillende uitkomsten
 
@@ -173,6 +196,63 @@ gevolgtrekking, met de eerlijke kanttekening dat het niet gemeten was. Die
 kanttekening is toen behandeld als "dus waarschijnlijk fout" in plaats van "dus
 nog te controleren". Eén tegenstrijdige waarneming is geen meting, en documentatie
 omgooien is duurder dan even nakijken.
+
+## 11. Wat er ná het eerste draaien is bijgesteld
+
+De handoff tekent vier schermen in hun geslaagde toestand, met weinig inhoud. Met
+vijftig echte formulieren erin bleek dat scherm te vol. Wat er is aangepast, en
+waarom:
+
+**Eén doorlopende hoogte.** De popup is nu 600px hoog — het maximum dat een
+browser toestaat — als één flexkolom: balk, stapetiket, paneel, knoppenbalk.
+Alleen de lijst scrollt. Daarvoor rekte het venster mee met de inhoud, waardoor
+de knoppenbalk bij een lange tabel buiten beeld viel.
+
+**De projectnaam staat in de gele balk**, naast "Form Stamper", en niet meer als
+regel op stap 2. Hij zegt wáár je bent, en dat blijft in alle vier de stappen
+gelden. Hij komt uit de Admin-API; het eerdere gokje op `document.title` leverde
+"Build" op — de naam van de module, niet van het project.
+
+**Minder tekst op stap 2.** De blauwe uitleg over Filters → Opmerkingen is weg
+daar en staat nu op stap 4. Dat is een bewuste afwijking van `ux-brief.md`, dat
+de regel op zowel het voorbeeld als het resultaat verplicht stelt. De reden om
+hem te hebben is dat iemand op een formulier gaat kijken en niets ziet staan — en
+dat gebeurt ná het stempelen, niet ervoor. Op stap 2 was het de vijfde tekstblok
+op rij.
+
+**"Opmerkingen", niet "notities".** ACC noemt het veld in de Nederlandse
+interface "Opmerkingen". De tool sprak van "notities", wat de gebruiker dwingt
+te vertalen. In de code heet het veld nog `notes` — dat is de API-naam en die
+blijft.
+
+**De volgorde van de tabel volgt de lijst.** Twee dingen maakten de volgorde
+willekeurig: het content script las de sleutels van `rowSelection` in de volgorde
+van aanvinken, en `GET forms` levert een blok terug in zijn eigen volgorde. Nu
+neemt het content script de weergavevolgorde van de tabel over — inclusief de
+sortering die de gebruiker zelf koos — en legt `previewForms` die volgorde terug
+over het antwoord van de API.
+
+Beperking: de tabel houdt maar de huidige pagina van 50 vast, dus formulieren van
+een andere pagina zijn niet te rangschikken. Die komen erachteraan. Het content
+script geeft de sorteerstand mee, zodat dat later alsnog kan.
+
+**Kleur volgt betekenis.** `nieuw` is groen (er komt iets bij waar niets stond),
+`bijgewerkt` amber, `ongewijzigd` grijs, `past niet` rood. Groen is hetzelfde
+groen als het vinkje op stap 3.
+
+**Twee dingen die niet met kleur alleen werken.** Geel als tekstkleur op wit
+heeft te weinig contrast om een regel leesbaar in te zetten; waar geel nodig is,
+staat het áchter blauw — zoals de balk bovenaan. En "0 formulieren geselecteerd"
+was rode tekst, wat te makkelijk te missen is voor het enige geval waarin de
+gebruiker iets moet doen voordat er iets kan gebeuren; dat is nu een lichtrood
+vlak.
+
+**De koptekst van de tabel was doorzichtig.** `opacity:.55` op een `<th>` maakt
+niet alleen de tekst dof maar ook de witte achtergrond, waardoor de rijen er bij
+het scrollen dwars doorheen te lezen waren. Nu een gedempte tekstkleur met een
+dekkende achtergrond. Ook `border-collapse` staat op `separate`: bij een
+samengevouwen rand hoort de rand aan de tabel en blijft hij achter terwijl de
+meescrollende kop meegaat.
 
 ## Wat er bij het bouwen nog uit kwam
 

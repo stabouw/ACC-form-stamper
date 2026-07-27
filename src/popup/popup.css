@@ -48,6 +48,13 @@ section{display:flex;flex-direction:column;flex:1;min-height:0}
 a{color:var(--hjm-blue)}
 a:hover{color:#001f3f}
 
+/*
+ * Knoppen erven `font-family` niet: zonder dit zet de browser er zijn eigen
+ * systeemlettertype in, en staat er ineens Segoe UI tussen de huisstijl. Hier
+ * één keer, zodat een nieuwe knop niet opnieuw door de mand valt.
+ */
+button{font-family:inherit}
+
 /* ---------------------------------------------------------------- chrome --- */
 
 .status-bar{background:var(--hjm-yellow);padding:13px 15px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0}

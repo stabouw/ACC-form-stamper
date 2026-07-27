@@ -1,0 +1,95 @@
+@echo off
+setlocal
+chcp 65001 >nul
+
+rem  Sjabloon. tools/package.mjs vult __DOELMAP__ en __VERSIE__ in en zet het
+rem  resultaat als installeren.cmd in het zipbestand.
+rem
+rem  Waarom dit script bestaat: een uitgepakte extensie wordt door Edge elke
+rem  keer opnieuw vanaf zijn map geladen. Staat die map in Downloads, dan
+rem  verdwijnt de extensie zodra iemand opruimt. Dit zet hem op een vaste plek
+rem  die daar niet aan onderhevig is.
+
+set "DOEL=__DOELMAP__"
+set "BRON=%~dp0extensie"
+
+echo.
+echo   Form Stamper __VERSIE__ installeren
+echo   ----------------------------------------------------
+echo.
+echo   Van   %BRON%
+echo   Naar  %DOEL%
+echo.
+
+if not exist "%BRON%\manifest.json" (
+  echo   FOUT: de map "extensie" staat niet naast dit script.
+  echo.
+  echo   Waarschijnlijk is alleen dit bestand uitgepakt in plaats van het
+  echo   hele zipbestand. Pak het zipbestand opnieuw uit en start dit
+  echo   script vanuit de uitgepakte map.
+  echo.
+  pause
+  exit /b 1
+)
+
+if exist "%DOEL%\manifest.json" (
+  echo   Let op: er staat al een versie op die plek. Die wordt vervangen.
+  echo   Je blijft aangemeld en je overzicht van uitvoeringen blijft staan.
+  echo.
+)
+
+choice /C JN /N /M "  Doorgaan? [J/N] "
+if errorlevel 2 goto afgebroken
+
+echo.
+echo   Bezig met kopieren...
+
+rem  /MIR ruimt ook bestanden op die in een vorige versie zaten en nu niet
+rem  meer. Zonder dat blijft er oude rommel achter die Edge alsnog inleest.
+robocopy "%BRON%" "%DOEL%" /MIR /NFL /NDL /NJH /NJS /NP >nul
+
+rem  Robocopy meldt succes met een code onder de 8; alles daarboven is een
+rem  echte fout. Een gewone "if errorlevel 1" zou hier dus onterecht alarm slaan.
+if errorlevel 8 goto mislukt
+
+echo.
+echo   Klaar. De extensie staat nu in:
+echo.
+echo       %DOEL%
+echo.
+echo   Nog even doen, eenmalig:
+echo.
+echo     1. Open Edge en ga naar  edge://extensions
+echo     2. Zet linksonder "Ontwikkelaarsmodus" aan
+echo     3. Klik op "Uitgepakt laden"
+echo     4. Kies de map hierboven
+echo.
+echo   Werk je een bestaande versie bij? Dan hoef je alleen op "Vernieuwen"
+echo   te klikken bij Form Stamper. Opnieuw laden is niet nodig.
+echo.
+choice /C JN /N /M "  Map nu openen in Verkenner? [J/N] "
+if errorlevel 2 goto einde
+start "" "%DOEL%"
+goto einde
+
+:mislukt
+echo.
+echo   FOUT: kopieren is niet gelukt (robocopy-code %errorlevel%).
+echo.
+echo   Meestal betekent dit dat er geen schrijfrechten zijn op
+echo   %DOEL%
+echo   of dat de map open staat in een ander venster.
+echo.
+pause
+exit /b 1
+
+:afgebroken
+echo.
+echo   Afgebroken. Er is niets gewijzigd.
+echo.
+pause
+exit /b 0
+
+:einde
+echo.
+pause

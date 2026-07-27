@@ -3,7 +3,8 @@
 ## Waarom
 
 In Forma Build kun je formulieren niet filteren op assetnaam of assetcategorie.
-Wat wél doorzoekbaar is, is het notitieveld van een formulier. Door de gekoppelde
+Wat wél doorzoekbaar is, is het opmerkingenveld van een formulier (`notes` in de
+API, **Opmerkingen** in de interface). Door de gekoppelde
 assets in dat veld te zetten, worden formulieren alsnog vindbaar per asset en per
 categorie.
 

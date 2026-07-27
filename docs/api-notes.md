@@ -349,6 +349,23 @@ het gewone formulier `""`. Allebei leeg, maar niet hetzelfde type. Overal
 `form.notes ?? ''` gebruiken — `splitNotes` en `buildStampedNotes` doen dat al,
 maar een vergelijking als `notes === ''` zou hierop stukgaan.
 
+### De projectnaam komt uit de Admin-API, mét regio-header
+
+```
+GET https://developer.api.autodesk.com/construction/admin/v1/projects/:projectId
+```
+
+Levert onder meer `name`. De tool gebruikt hem alleen om in de balk te tonen
+wélk project je op het punt staat te stempelen.
+
+**Deze aanroep heeft `x-ads-region` nodig.** Zonder die header zoekt de
+Admin-API het project op de US-tenant, vindt het niet, en antwoordt met een fout
+die op een rechtenprobleem lijkt terwijl het een adresprobleem is. Tot nu toe was
+de regio-header alleen bekend als eis van de relatieservice; hij geldt dus breder.
+
+De aanroep faalt zacht: geen naam, geen regel, de rest werkt door. Een projectnaam
+is versiering en mag nooit een run tegenhouden.
+
 ### De 8000 tekens kloppen
 
 `Max length: 8000` staat op **`notes`** — precies zoals `workflow.md` aannam. Op
