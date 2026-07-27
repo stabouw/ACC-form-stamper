@@ -6,7 +6,7 @@
 
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxUR43QL02f/9suZkpsoFZ5BRPnADD9thB8yGNurQgEDjfX/TrFtYAwcvr4NJ0wxvBlkJCRR4cudfMRTR00cPz6+otAwhoxAFef2X1gEpc1J1cMkU0lTAWBzhft/RoprbvBCMLp/0AS6i++uyrRJb9gTrunvoLkH31IYTX5xNUGVYLRFmUY3cvcNgE5hmagL7gwhAnbd0WJahPtwppuinUTjCndXJay05bSQ41gYYBAe32/iY0ITCEISWVBpeqsF75Zux9yPZE7Mje+hBIHNeyvHnCNdSYGKsocwufD9mJ75eEbzJB/obvHJgOe/f+CRL/WWo7vPe/Nw5B19VRWiKvQIDAQAB",
 
-  "permissions": ["identity", "storage"],
+  "permissions": ["identity", "storage", "tabs"],
 
   "host_permissions": [
     "https://developer.api.autodesk.com/*",
@@ -19,7 +19,35 @@
     "type": "module"
   },
 
+  "content_scripts": [
+    {
+      "matches": ["https://acc.autodesk.com/build/*", "https://acc.autodesk.eu/build/*"],
+      "js": ["content/selection-main.js"],
+      "world": "MAIN",
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://acc.autodesk.com/build/*", "https://acc.autodesk.eu/build/*"],
+      "js": ["content/selection.js"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+
   "action": {
-    "default_title": "ACC Form Stamper"
+    "default_title": "ACC Form Stamper",
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
   }
 }

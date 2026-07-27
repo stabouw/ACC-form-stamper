@@ -83,7 +83,8 @@ tabelinstantie) uit de lijst hieronder is de route.
 Eén ding voor de echte extensie: **lees de sleutels van
 `table.getState().rowSelection`, niet `getSelectedRowModel()`.** De tabel houdt
 maar één pagina van 50 rijen vast; de selectiestatus overleeft het doorbladeren,
-het rijmodel niet.
+het rijmodel niet. Bevestigd met een selectie van 200 formulieren over vier
+pagina's — het rijmodel zou er dan 50 teruggeven.
 
 De rest van dit document beschrijft het meetinstrument zoals het bedoeld was, en
 blijft staan omdat de probe bruikbaar blijft als ACC zijn lijst verbouwt.

@@ -213,6 +213,92 @@ export function buildStampedNotes({
 }
 
 /**
+ * De tekst die iemand ónder het assetblok heeft getypt.
+ *
+ * Alles onder de markering is van de tool en wordt in zijn geheel vervangen, dus
+ * deze tekst gaat bij het stempelen verloren. Dat is in `workflow.md` bewust
+ * geaccepteerd — het komt zelden voor — maar het is wel het enige geval waarin
+ * de tool iets van de gebruiker weggooit, en dat hoort gemeld te worden.
+ *
+ * Wordt achteraf gebruikt, niet vooraf: vooraf waarschuwen voor iets dat bijna
+ * nooit gebeurt, kost meer aandacht dan het waard is (design-decisions.md,
+ * punt 6).
+ *
+ * @param {string} notes
+ * @returns {string} De verloren tekst, of `''` als er niets onder staat.
+ */
+export function tekstOnderBlok(notes = '') {
+  const match = MARKER_RE.exec(notes);
+  if (!match) return '';
+
+  // De markering matcht op de regel zelf, dus wat erna komt begint met een
+  // nieuwe regel. Die eerste regel is de assetregel en hoort bij de tool.
+  const na = notes.slice(match.index + match[0].length).replace(/^\n/, '');
+  const [, ...rest] = na.split('\n');
+  return rest.join('\n').trim();
+}
+
+/**
+ * Wat gaat er met dit formulier gebeuren?
+ *
+ * Zet de losse uitkomsten van `buildStampedNotes` en `stampChanged` om in wat
+ * het Selecteren-scherm moet tonen. Staat hier en niet in de service worker,
+ * omdat het puur is en dus na te rekenen zonder ACC erbij.
+ *
+ * `tag` en de signalen staan met opzet los van elkaar: een formulier kan
+ * tegelijk bijgewerkt worden én ingekort zijn. Zie docs/design-decisions.md,
+ * punten 4 en 5.
+ *
+ * @param {object} params
+ * @param {string} params.huidig      Huidige notities.
+ * @param {string} params.voorstel    Voorgestelde notities.
+ * @param {number} params.assetCount
+ * @param {boolean} params.fits
+ * @param {number} params.shown
+ * @param {number} params.total
+ */
+export function bepaalUitkomst({ huidig, voorstel, assetCount, fits, shown, total }) {
+  const hadStempel = splitNotes(huidig).hasStamp;
+  const wijzigt = stampChanged(huidig, voorstel);
+
+  // Een formulier zonder assets is niet automatisch niets-te-doen. Stond er
+  // eerder wél een assetregel, dan is die nu verouderd en moet hij juist leeg.
+  const geenAssets = assetCount === 0;
+
+  let tag;
+  if (geenAssets && !hadStempel) {
+    // Geen assets én nooit gestempeld: er valt niets vast te leggen. Zonder deze
+    // uitzondering wint `stampChanged` — dat ziet geen markering in de huidige
+    // notities, noemt dat een wijziging, en dan zou de tool een lege assetregel
+    // onder een markering schrijven op een formulier dat helemaal geen assets
+    // heeft. Dat is precies het lege-lijst-geval uit ux-brief.md.
+    tag = 'ongewijzigd';
+  } else if (!fits) {
+    // De gebruikerstekst vult de 8000 al; er kan niets bij. Dit is geen
+    // "bijna vol" maar een weigering, en zo hoort het er ook te staan.
+    tag = 'past-niet';
+  } else if (!wijzigt) {
+    tag = 'ongewijzigd';
+  } else if (hadStempel) {
+    tag = 'bijgewerkt';
+  } else {
+    tag = 'nieuw';
+  }
+
+  return {
+    tag,
+    hadStempel,
+    geenAssets,
+    // Alleen melden als er ook werkelijk iets gebeurt — een ongewijzigd
+    // formulier zonder assets hoeft geen waarschuwing.
+    assetregelVervalt: geenAssets && hadStempel && wijzigt,
+    ingekort: fits && shown < total,
+    getoond: shown,
+    totaal: total,
+  };
+}
+
+/**
  * Is er iets te doen voor dit formulier?
  *
  * Vergelijkt op de **assetregel**, niet op de datum. Zou je de hele tekst

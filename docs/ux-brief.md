@@ -187,7 +187,7 @@ is sowieso nodig.
 |---|---|---|
 | Geen assets | Formulier heeft geen gekoppelde assets | Rij standaard **uit**; stempelen zou een lege lijst schrijven |
 | Bijna vol | Notities lopen tegen de 8000 tekens | Toon welke verkorting is toegepast (zie `workflow.md`) |
-| PDF-formulier | Niet te bewerken via de API | Rij uitgeschakeld, niet te selecteren |
+| ~~PDF-formulier~~ | ~~Niet te bewerken via de API~~ | **Vervallen.** Gemeten op 27-07-2026: PDF-formulieren zijn gewoon te stempelen. Geen signaal nodig |
 | Gesloten | Wordt heropend en weer gesloten | Rij uit tenzij de schakelaar aan staat; zichtbaar apart geteld, want hier gaat historie verloren |
 | Tekst onder het blok | Gaat verloren bij stempelen | Rij aan, maar zichtbaar gewaarschuwd |
 

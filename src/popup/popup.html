@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <title>Form Stamper</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!--
+    De gele balk en het stapetiket staan buiten de schermen: die zijn er altijd,
+    en alleen het etiket verandert mee. Zo kan er nooit een scherm zijn dat zijn
+    eigen kop vergeet.
+  -->
+  <div class="status-bar">
+    <div class="title-group">
+      <h1>Form Stamper</h1>
+      <span class="project" id="project-name" hidden></span>
+    </div>
+    <div class="icon-badge">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="3" width="8" height="7" rx="1.5"></rect><path d="M8 10l-2 6h12l-2-6"></path><path d="M4 20h16"></path></svg>
+    </div>
+  </div>
+  <div class="step-label" id="step-label">Stap 1 van 4 - Inloggen</div>
+
+  <!-- ================================================== 1 - Inloggen === -->
+  <section id="screen-login" hidden>
+    <div class="panel">
+      <h2>Inloggen bij Autodesk</h2>
+      <p class="hint">
+        Log in met je Autodesk-account, zodat de gekoppelde assets van de
+        formulieren in de formulier opmerkingen gezet kunnen worden.
+      </p>
+      <!-- UX-FLOW.md liet dit als open punt staan; dit is de inline regel. -->
+      <div class="error-line" id="login-error" hidden></div>
+    </div>
+    <div class="nav-row">
+      <div></div>
+      <button class="primary" id="btn-login">Inloggen bij Autodesk &rarr;</button>
+    </div>
+  </section>
+
+  <!-- ================================================ 2 - Selecteren === -->
+  <section id="screen-select" hidden>
+    <div class="panel">
+      <h2>Geselecteerde formulieren</h2>
+      <p class="hint tight" id="select-count">Selectie wordt gelezen…</p>
+
+      <p class="hint">
+        Handgeschreven opmerkingen blijven behouden, updates passen de bestaande
+        asset referentie(s) opmerkingen aan. Afhankelijk van het formuliersjabloon
+        zijn opmerkingen niet zichtbaar op het formulier zelf.
+      </p>
+
+      <div class="error-line" id="select-error" hidden></div>
+
+      <!--
+        Verschijnt alleen als er gesloten formulieren in de selectie zitten
+        (design-decisions.md, punt 3).
+      -->
+      <div class="toggle-box" id="closed-box" hidden>
+        <button class="switch" id="closed-toggle" role="switch" aria-checked="false" aria-labelledby="closed-label"></button>
+        <div class="t">
+          <strong id="closed-label">Ook gesloten formulieren</strong>
+          <span class="t-line" id="closed-count"></span>
+          <span class="t-line" id="closed-warning">
+            Jouw naam en de datum van vandaag komen te staan als wie ze heeft
+            afgerond. Dat kan niet ongedaan gemaakt worden.
+          </span>
+        </div>
+      </div>
+
+      <div class="scroll">
+        <table class="diff-table">
+          <thead>
+            <tr><th>Formulier</th><th>Gekoppelde assets</th><th>Status</th></tr>
+          </thead>
+          <tbody id="select-rows"></tbody>
+        </table>
+        <div class="loading-line" id="select-loading" hidden>
+          <span class="spinner"></span>
+          <span id="select-progress"></span>
+        </div>
+      </div>
+    </div>
+    <div class="nav-row">
+      <button class="ghost" id="btn-logout">Uitloggen</button>
+      <button class="primary" id="btn-stamp" disabled>Stempelen &rarr;</button>
+    </div>
+  </section>
+
+  <!-- ================================================= 3 - Stempelen === -->
+  <section id="screen-stamp" hidden>
+    <div class="panel">
+      <h2 id="stamp-title">Bezig met stempelen</h2>
+      <p class="hint" id="stamp-summary"></p>
+
+      <div class="scroll" id="stamp-scroll">
+        <div id="stamp-rows"></div>
+      </div>
+    </div>
+    <div class="nav-row">
+      <button class="ghost" id="btn-stamp-secondary">Annuleren</button>
+      <button class="primary" id="btn-to-summary" disabled>Naar samenvatting &rarr;</button>
+    </div>
+  </section>
+
+  <!-- ============================================== 4 - Samenvatting === -->
+  <section id="screen-summary" hidden>
+    <div class="panel">
+      <h2>Laatste uitvoeringen</h2>
+      <p class="hint">
+        Elke uitvoering bewaart de oude opmerkingen en status, en kan
+        teruggedraaid worden.
+      </p>
+
+      <!--
+        Hoort hier en niet op stap 2: dit is het moment waarop iemand gaat
+        controleren of het gelukt is, en dus het moment waarop hij op een
+        formulier kijkt en niets ziet staan.
+      -->
+      <p class="hint">
+        Je vindt de gekoppelde asset(categorieën) van de formulieren nu terug via
+        <strong>Filters &rarr; Opmerkingen</strong> in het overzicht.
+      </p>
+
+      <div class="error-line" id="summary-error" hidden></div>
+
+      <div class="scroll">
+        <div id="summary-rows"></div>
+      </div>
+    </div>
+    <div class="nav-row">
+      <button class="ghost" id="btn-close">Sluiten</button>
+      <button class="primary" id="btn-restart">Nieuwe uitvoering starten</button>
+    </div>
+  </section>
+
+  <!--
+    Dialoog A uit ux-brief.md. Undo vroeg in het ontwerp niets, maar het draait
+    wél schrijfacties terug — en bij heropende formulieren blijft er iets staan
+    dat niet te herstellen is. Dat hoort vóór de klik, niet erna.
+  -->
+  <div class="overlay" id="undo-dialog" hidden>
+    <div class="dialog">
+      <h3>Uitvoering terugdraaien</h3>
+      <p id="undo-text"></p>
+      <p class="dialog-warn" id="undo-warn" hidden>
+        De opmerkingen en de status gaan terug naar hoe ze waren. Wie de formulieren
+        heeft afgerond en wanneer, blijft staan zoals het nu is — dat is niet meer
+        te herstellen.
+      </p>
+      <div class="dialog-buttons">
+        <button class="ghost" id="btn-undo-cancel">Annuleren</button>
+        <button class="primary" id="btn-undo-confirm">Terugdraaien</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

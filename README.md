@@ -16,23 +16,49 @@ OAuth (PKCE), zodat de rechten van de gebruiker zelf gelden.
 
 ## Status
 
-Verkenning afgerond, bouwen kan beginnen. De twee metingen die het ontwerp
-konden omgooien zijn gedaan en vielen goed uit. Er wordt nog niets gestempeld
-op schaal — wel is één formulier met de hand gestempeld en teruggedraaid.
+De extensie is compleet: alle vier de stappen zijn gebouwd en aangesloten op de
+echte API. De selectie wordt uit ACC gelezen, de tabel laat per formulier zien
+wat er gaat gebeuren, het stempelen schrijft formulier voor formulier weg, en
+elke uitvoering is terug te draaien.
+
+Nog niet gedaan: een echte run over een grote selectie. Wat er getest is, is de
+logica (31 tests) en losse formulieren met de hand.
 
 | | |
 |---|---|
 | [`docs/workflow.md`](docs/workflow.md) | Wat de tool doet: stempelformaat, de gemaakte keuzes, en waarom |
 | [`docs/api-notes.md`](docs/api-notes.md) | Wat we van de APS/ACC-API weten — met per punt of het bewezen of aangenomen is |
-| [`docs/ux-brief.md`](docs/ux-brief.md) | Schermen, toestanden en gebruikersinvoer — startpunt voor het ontwerp |
+| [`docs/ux-brief.md`](docs/ux-brief.md) | Schermen, toestanden en gebruikersinvoer — het functionele startpunt |
+| [`docs/design_handoff_form_stamper/`](docs/design_handoff_form_stamper/) | Het visuele ontwerp: vier schermen, huisstijl, en de UX-flow |
+| [`docs/design-decisions.md`](docs/design-decisions.md) | Wat de bouw doet waar het ontwerp zwijgt — lees dit vóór je aan het paneel werkt |
 | [`src/aps/`](src/aps/) | De APS-koppeling: aanmelden en de REST-aanroepen |
+| [`src/popup/`](src/popup/) | Het paneel zelf |
+| [`src/content/`](src/content/) | Leest de aangevinkte formulieren uit de ACC-pagina |
+| [`src/stamp.js`](src/stamp.js) | De stempellogica, puur en getest |
 | [`poc/selection-probe/`](poc/selection-probe/) | Meetinstrument: kan de extensie de selectie uit de ACC-UI lezen? |
 | [`.claude/skills/`](.claude/skills/) | `aps-docs` en `aps-sdk-openapi` — hiermee zoek je de APS-referentie op in plaats van te gokken |
 
+## Draaien
+
+Laad `src/` als uitgepakte extensie via `edge://extensions` (ontwikkelaarsmodus
+aan). Het `key`-veld in de manifest houdt het extensie-id vast, en daarmee de
+callback-URL die bij Autodesk geregistreerd staat — laad dus `src/` zelf, niet
+een kopie.
+
+De tests:
+
+```
+node --test src/stamp.test.js src/journaal.test.js
+```
+
+`stamp.test.js` dekt de stempellogica (puur, geen browser). `journaal.test.js`
+laadt de service worker met een nagebootste `chrome` en `FormaClient`, en test
+het schrijven, het opnieuw proberen en het terugdraaien zonder ACC aan te raken.
+
 ## Waar het nu staat
 
-De hele opzet leunde op twee dingen die geen van beide gedocumenteerd zijn door
-Autodesk. Op 27-07-2026 zijn ze allebei gemeten, en allebei gunstig.
+De hele opzet leunde op een aantal dingen die geen van alle gedocumenteerd zijn
+door Autodesk. Op 27-07-2026 zijn ze gemeten, en allemaal gunstig.
 
 **De selectie is uitleesbaar, op formulier-id.** De formulierenlijst is een
 TanStack Table met `getRowId: e => e.uid`, en `getState().rowSelection` bevat de
@@ -45,16 +71,27 @@ notities → `submitted` werkt in één sessie. Wel met een prijs: het opnieuw
 sluiten overschrijft "gesloten door" en "gesloten op", en dát is niet terug te
 draaien. De optie blijft dus bestaan, maar standaard uit en met uitleg.
 
-Beide metingen staan met hun uitkomst in [`docs/api-notes.md`](docs/api-notes.md).
+**PDF-formulieren zijn gewoon te stempelen.** De referentie zegt van niet, en
+daar was het ontwerp op ingericht: eruit filteren, met een melding. De meting zegt
+iets anders — schrijven, teruglezen en terugzetten slaagden alle vier. Er hoeft
+dus niets gefilterd te worden, wat een tag, een teller en een uitleg scheelt.
+
+Dat is drie van de drie: elke ongedocumenteerde beperking waar we op zijn gaan
+meten, viel bij meting de andere kant op. Waard om te onthouden bij de volgende.
+
+Alle metingen staan met hun uitkomst in [`docs/api-notes.md`](docs/api-notes.md).
 
 ## Volgende stappen
 
-1. **Kern bouwen.** De stempellogica — het afgeschermde blok, het opbouwen van
-   categoriepaden, de afbouwladder bij 8000 tekens — hangt nergens meer van af.
-2. **Selectie doorgeven.** Een content script dat `rowSelection` uitleest en de
-   id's naar de service worker stuurt. Let op: lees de **sleutels van
-   `rowSelection`**, niet `getSelectedRowModel()` — de tabel houdt maar één
-   pagina van 50 vast, de selectie zelf overleeft het doorbladeren wel.
-3. **Paneel bouwen** volgens [`docs/ux-brief.md`](docs/ux-brief.md).
-4. **`BatchFormCreator` gelijktrekken** met het stempelformaat, zodat nieuwe en
+1. **Draaien op een echte selectie.** De logica is getest, de schaal niet. Doe
+   een run van tien à twintig formulieren op een testproject, draai hem terug, en
+   kijk of het journaal klopt met wat er in ACC staat.
+2. **`BatchFormCreator` gelijktrekken** met het stempelformaat, zodat nieuwe en
    bijgewerkte formulieren niet van elkaar te onderscheiden zijn voor een filter.
+3. **Uitzoeken of `include=layoutInfo` per sjabloon vertelt of het notitieblok
+   aan staat.** Zo ja, dan kan de vaste uitleg over Filters → Opmerkingen een
+   signaal per rij worden — preciezer dan de algemene tekst die er nu staat.
+
+Vóór dit tegen een echt project draait: `PROBE_CONFIRM_DEFAULT` in
+[`src/background.js`](src/background.js) staat op `true` omdat er op
+testprojecten gemeten wordt. Terugzetten op `false`.

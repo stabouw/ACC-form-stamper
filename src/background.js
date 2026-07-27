@@ -14,15 +14,37 @@ import {
   FormaClient,
   FORM_DOMAIN,
   FORM_TYPE,
+  FORMS_MAX_LIMIT,
+  INTERSECT_MAX_ENTITIES,
   STATUS_V2_TO_V1,
   normalizeProjectId,
 } from './aps/forma.js';
 import { ApsError } from './aps/errors.js';
-import { buildCategoryIndex, buildStampedNotes, formatAsset, stampChanged } from './stamp.js';
+import {
+  bepaalUitkomst,
+  buildCategoryIndex,
+  buildStampedNotes,
+  formatAsset,
+  stampChanged,
+  tekstOnderBlok,
+} from './stamp.js';
 import { APS_CLIENT_ID, ACC_REGION, assertRedirectUri } from './config.js';
 
 const auth = new ApsAuth({ clientId: APS_CLIENT_ID });
 const forma = new FormaClient({ auth, region: ACC_REGION });
+
+/**
+ * Standaardwaarde van `bevestig` op de probes die écht schrijven.
+ *
+ * Staat op `true` omdat er op testprojecten gemeten wordt en het bij elke aanroep
+ * meetypen van `bevestig: true` daar alleen in de weg zit.
+ *
+ * **Zet dit terug op `false` zodra er tegen een echt project gedraaid wordt.**
+ * De vlag bestaat om te voorkomen dat een half ingetikte consoleregel — met
+ * enter erachter voor het af is — een formulier wijzigt. Op één plek, zodat het
+ * terugzetten één regel is.
+ */
+const PROBE_CONFIRM_DEFAULT = true;
 
 // -----------------------------------------------------------------------------
 // Berichten vanaf het paneel
@@ -71,6 +93,382 @@ const handlers = {
       })),
     };
   },
+};
+
+// -----------------------------------------------------------------------------
+// Verrijken: van formulier-id's naar wat er op Selecteren komt te staan
+// -----------------------------------------------------------------------------
+
+/**
+ * De categorieboom per project, één keer opgehaald.
+ *
+ * De boom is projectbreed en verandert tijdens een sessie niet. Hem per blok van
+ * twintig opnieuw ophalen zou bij honderd formulieren vijf keer dezelfde aanroep
+ * zijn.
+ */
+const categoryCache = new Map();
+
+async function getCategoryIndex(projectId) {
+  const key = normalizeProjectId(projectId);
+  if (!categoryCache.has(key)) {
+    categoryCache.set(
+      key,
+      forma.listCategories({ projectId }).then(buildCategoryIndex),
+    );
+  }
+  return categoryCache.get(key);
+}
+
+/**
+ * Verrijkt één blok formulieren en zegt per formulier wat er gaat gebeuren.
+ *
+ * Eén blok is maximaal 20, want dat is de grens van `relationships:intersect`.
+ * De popup snijdt de selectie in blokken en roept dit herhaald aan, zodat de
+ * tabel zich vult terwijl de rest nog loopt (design-decisions.md, punt 2).
+ *
+ * Er wordt hier niets geschreven.
+ */
+handlers.previewForms = async ({ projectId, formIds }) => {
+  if (!projectId) throw new ApsError('client', 'previewForms: projectId ontbreekt.');
+  if (!formIds?.length) return { formulieren: [] };
+  if (formIds.length > INTERSECT_MAX_ENTITIES) {
+    throw new ApsError(
+      'client',
+      `previewForms neemt maximaal ${INTERSECT_MAX_ENTITIES} formulieren per aanroep.`,
+    );
+  }
+
+  const containerId = normalizeProjectId(projectId);
+
+  // De formulierrecords en de gekoppelde assets zijn onafhankelijk van elkaar.
+  const [{ forms }, assetIdsPerForm, categoryIndex] = await Promise.all([
+    forma.listForms({ projectId, ids: formIds, limit: FORMS_MAX_LIMIT }),
+    forma.findAssetIdsForForms({ containerId, formIds }),
+    getCategoryIndex(projectId),
+  ]);
+
+  // Alle asset-id's van dit blok in één keer ophalen; per formulier zou hetzelfde
+  // asset bij meerdere formulieren opnieuw opgevraagd worden.
+  const alleAssetIds = [...new Set([...assetIdsPerForm.values()].flat())];
+  const assets = alleAssetIds.length
+    ? await forma.getAssetsByIds({ projectId, ids: alleAssetIds })
+    : [];
+  const assetById = new Map(assets.map((a) => [String(a.id), a]));
+
+  const formulieren = forms.map((form) => {
+    const eigenAssets = (assetIdsPerForm.get(form.id) ?? [])
+      .map((id) => assetById.get(String(id)))
+      .filter(Boolean);
+
+    // `notes` kan `null` zijn — bij PDF-formulieren is dat de normale waarde.
+    const huidig = form.notes ?? '';
+    const { notes, level, shown, total, fits } = buildStampedNotes({
+      existing: huidig,
+      assets: eigenAssets,
+      categoryIndex,
+    });
+
+    return {
+      id: form.id,
+      formNum: form.formNum,
+      naam: form.name,
+      status: form.status,
+      templateId: form.formTemplateId,
+      gesloten: form.status === 'closed',
+      assets: eigenAssets.map((a) => formatAsset(a, categoryIndex)).sort((a, b) => a.localeCompare(b, 'nl')),
+      niveau: level,
+      huidigeNotities: huidig,
+      voorgesteldeNotities: notes,
+      ...bepaalUitkomst({
+        huidig,
+        voorstel: notes,
+        assetCount: eigenAssets.length,
+        fits,
+        shown,
+        total,
+      }),
+    };
+  });
+
+  // `GET forms` levert de formulieren in zijn eigen volgorde, niet in die van
+  // de `ids` die we meegaven. Zonder dit terugleggen staat de tabel in het
+  // paneel in een andere volgorde dan de lijst waar de gebruiker net naar keek.
+  const gevraagd = new Map(formIds.map((id, index) => [id, index]));
+  formulieren.sort((a, b) => gevraagd.get(a.id) - gevraagd.get(b.id));
+
+  // Een id waar geen formulier bij hoort, hoort niet stil te verdwijnen: dan
+  // klopt de selectie niet meer met het project.
+  const gevonden = new Set(forms.map((f) => f.id));
+  const ontbrekend = formIds.filter((id) => !gevonden.has(id));
+
+  return { formulieren, ontbrekend };
+};
+
+// -----------------------------------------------------------------------------
+// Het journaal
+// -----------------------------------------------------------------------------
+
+const JOURNAAL_SLEUTEL = 'journaal';
+
+/**
+ * Hoeveel uitvoeringen we bewaren.
+ *
+ * Elke regel draagt de oude notities van elk formulier, dus een run over
+ * driehonderd formulieren is niet klein. Twintig runs is ruim genoeg om iets van
+ * vorige week terug te draaien, zonder de opslag vol te laten lopen.
+ */
+const JOURNAAL_MAX = 20;
+
+async function leesJournaal() {
+  const opslag = await chrome.storage.local.get(JOURNAAL_SLEUTEL);
+  return opslag[JOURNAAL_SLEUTEL] ?? [];
+}
+
+async function schrijfJournaal(runs) {
+  await chrome.storage.local.set({ [JOURNAAL_SLEUTEL]: runs.slice(0, JOURNAAL_MAX) });
+}
+
+/**
+ * Werkt één uitvoering bij.
+ *
+ * Lezen, wijzigen, schrijven — elke keer opnieuw, en met opzet niet met een
+ * kopie in het geheugen. De service worker mag tussen twee formulieren door
+ * afgeschoten worden; wat dan niet in de opslag staat, bestaat niet.
+ */
+async function werkRunBij(runId, wijzig) {
+  const runs = await leesJournaal();
+  const index = runs.findIndex((r) => r.id === runId);
+  if (index === -1) throw new ApsError('notfound', `Uitvoering ${runId} bestaat niet.`);
+
+  runs[index] = wijzig(runs[index]);
+  await schrijfJournaal(runs);
+  return runs[index];
+}
+
+/** Begint een uitvoering. Levert het id waaronder elk formulier wordt bijgeschreven. */
+handlers.startRun = async ({ projectId, projectNaam }) => {
+  const run = {
+    id: `run-${Date.now()}`,
+    projectId,
+    projectNaam: projectNaam ?? null,
+    gestart: new Date().toISOString(),
+    formulieren: [],
+  };
+
+  // Uitvoeringen zonder één verwerkt formulier zijn afgebroken vóór er iets
+  // gebeurde. Ze opruimen is niet cosmetisch: ze tellen wél mee voor JOURNAAL_MAX
+  // en zouden zo een echte, terug te draaien uitvoering uit de lijst duwen.
+  const eerdere = (await leesJournaal()).filter((r) => r.formulieren.length > 0);
+
+  await schrijfJournaal([run, ...eerdere]);
+  return { runId: run.id };
+};
+
+handlers.getJournaal = async () => ({ runs: await leesJournaal() });
+
+/**
+ * De naam van het project, als hij te krijgen is.
+ *
+ * Faalt zacht: de naam is er om de gebruiker te laten zien wélk project hij op
+ * het punt staat te stempelen, maar er hangt niets van af. Geeft de aanroep een
+ * fout — bijvoorbeeld omdat de app geen toegang heeft tot de Admin-API — dan
+ * verdwijnt de regel en werkt de rest gewoon door.
+ */
+handlers.getProjectNaam = async ({ projectId }) => {
+  try {
+    const project = await forma.getProject({ projectId });
+    return { naam: project?.name ?? null };
+  } catch (error) {
+    console.warn('[ACC Form Stamper] projectnaam niet opgehaald:', error.message);
+    return { naam: null };
+  }
+};
+
+// -----------------------------------------------------------------------------
+// Stempelen
+// -----------------------------------------------------------------------------
+
+/**
+ * Stempelt één formulier en legt meteen vast hoe het terug moet.
+ *
+ * Het formulier wordt hier **opnieuw gelezen**, en niet op het voorbeeld
+ * vertrouwd. Twee redenen, en de tweede is de belangrijkste:
+ *
+ *   1. Iemand anders kan het formulier tussen voorbeeld en uitvoering gewijzigd
+ *      hebben. Dat hoort een fout op deze rij te zijn, niet een stille
+ *      overschrijving van andermans werk.
+ *   2. De terugdraairegel moet bewaren wat er **werkelijk stond vlak voor wij
+ *      schreven** — niet wat het voorbeeld ooit zag. Een journaal dat een
+ *      verouderde waarde teruggeeft, maakt het terugdraaien erger dan het
+ *      probleem.
+ *
+ * De journaalregel gaat weg vóór de melding terugkomt bij het paneel, zodat een
+ * afgebroken of gepauzeerde run nooit een gestempeld formulier achterlaat dat
+ * niet terug te draaien is (design-decisions.md, punt 8).
+ */
+handlers.stampForm = async ({ runId, projectId, formId, heropenen = false }) => {
+  const form = await findForm(projectId, formId);
+  const templateId = form.formTemplateId;
+
+  // `notes` is `null` bij PDF-formulieren; overal als lege tekst behandelen.
+  const huidig = form.notes ?? '';
+  const wasGesloten = form.status === 'closed';
+
+  const [assetIdsPerForm, categoryIndex] = await Promise.all([
+    forma.findAssetIdsForForms({ containerId: normalizeProjectId(projectId), formIds: [formId] }),
+    getCategoryIndex(projectId),
+  ]);
+  const assetIds = assetIdsPerForm.get(formId) ?? [];
+  const assets = assetIds.length ? await forma.getAssetsByIds({ projectId, ids: assetIds }) : [];
+
+  const { notes, shown, total, fits } = buildStampedNotes({
+    existing: huidig,
+    assets,
+    categoryIndex,
+  });
+  const uitkomst = bepaalUitkomst({
+    huidig,
+    voorstel: notes,
+    assetCount: assets.length,
+    fits,
+    shown,
+    total,
+  });
+
+  /**
+   * Legt de afloop vast in het journaal en geeft hem terug aan het paneel.
+   *
+   * Vervangt een bestaande regel voor hetzelfde formulier in plaats van er een
+   * toe te voegen. Dat is nodig voor "opnieuw proberen": zonder dit zou een
+   * formulier dat eerst faalde en daarna slaagde twee keer in de uitvoering
+   * staan — één keer als fout en één keer als geschreven. De telling klopt dan
+   * niet, en het terugdraaien zou het formulier twee keer aanpakken.
+   */
+  const noteer = async (regel) => {
+    const entry = {
+      formId,
+      templateId,
+      formNum: form.formNum,
+      naam: form.name,
+      ...regel,
+    };
+
+    await werkRunBij(runId, (run) => {
+      const formulieren = [...run.formulieren];
+      const bestaand = formulieren.findIndex((f) => f.formId === formId);
+      if (bestaand === -1) formulieren.push(entry);
+      else formulieren[bestaand] = entry;
+      return { ...run, formulieren };
+    });
+
+    return entry;
+  };
+
+  if (uitkomst.tag === 'ongewijzigd') {
+    return noteer({ resultaat: 'overgeslagen', melding: 'Overgeslagen - assetregel ongewijzigd' });
+  }
+  if (uitkomst.tag === 'past-niet') {
+    return noteer({
+      resultaat: 'fout',
+      melding: 'Fout: past niet binnen 8000 tekens - de opmerkingen zijn al te lang',
+    });
+  }
+  if (wasGesloten && !heropenen) {
+    return noteer({
+      resultaat: 'fout',
+      melding: 'Fout: formulier is gesloten - niet in selectie voor heropenen',
+    });
+  }
+
+  // Wat er onder het blok stond, gaat nu verloren. Achteraf melden (punt 6).
+  const verlorenTekst = tekstOnderBlok(huidig);
+
+  try {
+    // Een gesloten formulier moet eerst open. Altijd naar `draft`, nooit naar
+    // `in_review`: die tussenstap is een instelling van het sjabloon, en staat
+    // die uit dan zetten we het formulier in een toestand die het niet kent.
+    if (wasGesloten) {
+      await forma.updateForm({ projectId, templateId, formId, patch: { status: 'draft' } });
+    }
+
+    await forma.setFormNotes({ projectId, templateId, formId, notes });
+
+    if (wasGesloten) {
+      await forma.updateForm({ projectId, templateId, formId, patch: { status: 'submitted' } });
+    }
+  } catch (error) {
+    // Loopt het halverwege stuk op een heropend formulier, dan staat het nu open
+    // terwijl het dicht was. Dat moet in het journaal, anders merkt niemand het.
+    return noteer({
+      resultaat: 'fout',
+      melding: `Fout: ${error.message}`,
+      formulierBlijftOpen: wasGesloten,
+      // Er kán al geschreven zijn voordat het herstellen van de status faalde.
+      voor: { notes: huidig, gesloten: wasGesloten },
+    });
+  }
+
+  return noteer({
+    resultaat: 'geschreven',
+    melding: uitkomst.ingekort
+      ? `Opmerkingen bijgewerkt, ingekort naar limiet (${uitkomst.getoond} van ${uitkomst.totaal})`
+      : uitkomst.assetregelVervalt
+        ? 'Opmerkingen bijgewerkt - assetregel leeggemaakt'
+        : 'Opmerkingen bijgewerkt',
+    heropend: wasGesloten,
+    verlorenTekst: verlorenTekst || undefined,
+    // Dit is de terugdraairegel. Wat hier staat, is wat er stond vlak voordat
+    // wij schreven.
+    voor: { notes: huidig, gesloten: wasGesloten },
+    na: { notes },
+  });
+};
+
+/**
+ * Draait één uitvoering terug.
+ *
+ * Zet de notities terug, en bij een heropend formulier ook de status. Wat níét
+ * terugkomt: "gesloten door" en "gesloten op". Die zijn bij het opnieuw sluiten
+ * overschreven en zijn onherstelbaar — dat moet de gebruiker gezegd worden vóór
+ * hij hierop klikt, niet erna.
+ */
+handlers.undoRun = async ({ runId }) => {
+  const runs = await leesJournaal();
+  const run = runs.find((r) => r.id === runId);
+  if (!run) throw new ApsError('notfound', `Uitvoering ${runId} bestaat niet.`);
+
+  const teruggedraaid = [];
+  const mislukt = [];
+
+  for (const entry of run.formulieren) {
+    if (entry.resultaat !== 'geschreven' || !entry.voor) continue;
+
+    const { projectId } = run;
+    const { templateId, formId } = entry;
+
+    try {
+      if (entry.voor.gesloten) {
+        await forma.updateForm({ projectId, templateId, formId, patch: { status: 'draft' } });
+      }
+      await forma.setFormNotes({ projectId, templateId, formId, notes: entry.voor.notes });
+      if (entry.voor.gesloten) {
+        await forma.updateForm({ projectId, templateId, formId, patch: { status: 'submitted' } });
+      }
+      teruggedraaid.push(entry.formId);
+    } catch (error) {
+      mislukt.push({ formId: entry.formId, naam: entry.naam, melding: error.message });
+    }
+  }
+
+  await werkRunBij(runId, (r) => ({
+    ...r,
+    teruggedraaidOp: new Date().toISOString(),
+    // Half gelukt is niet teruggedraaid: anders verdwijnt de knop terwijl er nog
+    // formulieren op de nieuwe tekst staan.
+    teruggedraaid: mislukt.length === 0,
+  }));
+
+  return { teruggedraaid: teruggedraaid.length, mislukt };
 };
 
 /**
@@ -138,7 +536,7 @@ handlers.previewStamp = async (payload) => {
  * terugdraaien, want de tool houdt nog geen journaal bij.
  */
 handlers.writeStamp = async (payload) => {
-  const { projectId, formId, bevestig = false } = withUrl(payload);
+  const { projectId, formId, bevestig = PROBE_CONFIRM_DEFAULT } = withUrl(payload);
   const preview = await handlers.previewStamp({ projectId, formId });
 
   if (!bevestig) {
@@ -337,7 +735,7 @@ handlers.probeReopen = async (payload) => {
     projectId,
     formId,
     templateId: templateIdUitUrl,
-    bevestig = false,
+    bevestig = PROBE_CONFIRM_DEFAULT,
     testNotitie = false,
     weerSluiten = true,
   } = withUrl(payload);
@@ -450,6 +848,179 @@ handlers.probeReopen = async (payload) => {
 };
 
 /**
+ * De derde ongedocumenteerde aanname: zijn PDF-formulieren te stempelen?
+ *
+ * `api-notes.md` zegt van niet, maar dat komt uit de referentie van Autodesk en
+ * is nooit gemeten — net als de twee aannames die op 27-07-2026 wél gemeten
+ * werden en allebei de andere kant op vielen. De ACC-interface spreekt de
+ * referentie bovendien tegen: een PDF-formulier heeft gewoon een
+ * Formulierdetails-paneel met een ingevuld notitieveld en een referentiesectie.
+ *
+ * Deze probe doet twee dingen, en de eerste kan zonder iets te schrijven:
+ *
+ *   1. **Herkennen.** Dumpt het rauwe v2-record en zet de velden van dit
+ *      formulier naast die van een gewoon formulier. Zonder een veld dat
+ *      "dit is een PDF-formulier" zegt, kan de tool ze niet apart behandelen —
+ *      dus is dit net zo belangrijk als de schrijftest zelf.
+ *   2. **Schrijven.** PATCH notities → opnieuw lezen → terugzetten → opnieuw
+ *      lezen. Opnieuw lezen is geen overbodige stap: bij `probeReopen` bleek
+ *      dat wat de PATCH teruggeeft niet hetzelfde is als wat er staat.
+ *
+ * Zoeken kan op id of op naam:
+ *
+ *   await stamper.probePdfForm({ projectId: '948dda3b-…', zoek: 'WT II_307N' })
+ *   await stamper.probePdfForm({ projectId: '948dda3b-…', zoek: 'WT II_307N', bevestig: true })
+ *
+ * Zonder `bevestig: true` wordt er niets geschreven.
+ */
+handlers.probePdfForm = async (payload) => {
+  const {
+    projectId,
+    formId,
+    templateId: templateIdUitUrl,
+    zoek,
+    bevestig = PROBE_CONFIRM_DEFAULT,
+  } = withUrl(payload);
+
+  // Het doelformulier: op id als we die hebben, anders op naam.
+  let form;
+  if (formId) {
+    form = await findForm(projectId, formId);
+  } else if (zoek) {
+    const { forms } = await forma.listForms({ projectId, search: zoek, limit: 10 });
+    if (forms.length === 0) {
+      throw new ApsError('notfound', `Geen formulier gevonden voor "${zoek}".`);
+    }
+    form = forms[0];
+  } else {
+    throw new ApsError('client', 'Geef een formId, een url, of zoek: "<naam>" mee.');
+  }
+
+  // Een tweede formulier van een ánder sjabloon, puur als vergelijkingsmateriaal.
+  // Welk veld een PDF-formulier verraadt, is alleen te zien door twee records
+  // naast elkaar te leggen.
+  const { forms: steekproef } = await forma.listForms({ projectId, limit: 25 });
+  const ander = steekproef.find((f) => f.formTemplateId !== form.formTemplateId);
+
+  const velden = (record) =>
+    Object.fromEntries(
+      Object.entries(record ?? {}).map(([k, v]) => [
+        k,
+        v === null || typeof v !== 'object' ? v : Array.isArray(v) ? `[${v.length}]` : '{…}',
+      ]),
+    );
+
+  const rapport = {
+    formulier: { id: form.id, formNum: form.formNum, name: form.name, status: form.status },
+    templateId: form.formTemplateId,
+    // Het record is leidend voor de PATCH, de URL dient als controle. Lopen ze
+    // uiteen, dan klopt onze aanname over dat URL-segment niet — en juist bij
+    // een PDF-formulier is dat het narekenen waard.
+    templateIdUitUrl,
+    templateIdKlopt: templateIdUitUrl ? templateIdUitUrl === form.formTemplateId : undefined,
+    bewerkbareStatus: form.status === 'inProgress' || form.status === 'inReview',
+    huidigeNotities: form.notes ?? '',
+    // Hier moet uit blijken wáár een PDF-formulier zich verraadt.
+    herkenning: {
+      ditFormulier: velden(form),
+      terVergelijking: ander ? velden(ander) : 'geen formulier van een ander sjabloon gevonden',
+      alleenHier: ander
+        ? Object.keys(form).filter((k) => !(k in ander))
+        : undefined,
+      alleenDaar: ander
+        ? Object.keys(ander).filter((k) => !(k in form))
+        : undefined,
+    },
+  };
+
+  if (!bevestig) {
+    return {
+      geschreven: false,
+      reden: 'Geef bevestig: true mee om de schrijftest te doen.',
+      ...rapport,
+    };
+  }
+  if (!rapport.bewerkbareStatus) {
+    return {
+      geschreven: false,
+      reden:
+        `Formulier staat op "${form.status}". Deze probe meet of een PDF-formulier ` +
+        'te bewerken is, niet of een gesloten formulier dat is — pak een formulier ' +
+        'dat openstaat, anders meten we het verkeerde.',
+      ...rapport,
+    };
+  }
+
+  const origineel = form.notes ?? '';
+  const proef = `probe pdf-notities ${new Date().toISOString()}`;
+  const stappen = [];
+
+  const stap = async (naam, fn) => {
+    try {
+      const resultaat = await fn();
+      stappen.push({ stap: naam, gelukt: true });
+      return { gelukt: true, resultaat };
+    } catch (error) {
+      stappen.push({
+        stap: naam,
+        gelukt: false,
+        status: error?.status,
+        melding: error?.message,
+        // De rauwe tekst van Autodesk zegt of het op het PDF-karakter stuit of
+        // op iets heel anders.
+        antwoord: typeof error?.detail === 'string' ? error.detail.slice(0, 500) : undefined,
+      });
+      return { gelukt: false, error };
+    }
+  };
+
+  const schrijf = await stap('notities patchen', () =>
+    forma.updateForm({
+      projectId,
+      templateId: form.formTemplateId,
+      formId: form.id,
+      patch: { notes: proef },
+    }),
+  );
+
+  // Wat de PATCH teruggeeft is niet per se wat er staat.
+  const naSchrijven = await stap('lezen na schrijven', () => findForm(projectId, form.id));
+  const echtGeschreven = naSchrijven.gelukt && naSchrijven.resultaat.notes === proef;
+
+  // Altijd terugzetten, ook als de controle hierboven tegenviel — er kan best
+  // geschreven zijn zonder dat het teruglezen klopte.
+  let hersteld = false;
+  if (schrijf.gelukt) {
+    const terug = await stap('notities terugzetten', () =>
+      forma.updateForm({
+        projectId,
+        templateId: form.formTemplateId,
+        formId: form.id,
+        patch: { notes: origineel },
+      }),
+    );
+    const naHerstel = terug.gelukt
+      ? await stap('lezen na terugzetten', () => findForm(projectId, form.id))
+      : { gelukt: false };
+    hersteld = naHerstel.gelukt && (naHerstel.resultaat.notes ?? '') === origineel;
+  }
+
+  return {
+    conclusie: echtGeschreven
+      ? 'PDF-formulieren zijn wél te stempelen. De regel "uit de selectie filteren" in api-notes.md vervalt.'
+      : 'Notities schrijven lukt niet op dit formulier. Zie stappen voor de reden — let op of die reden echt over PDF gaat.',
+    geschreven: echtGeschreven,
+    hersteld,
+    // Blijft dit op false staan, dan staat de proeftekst nog in het formulier
+    // en moet die met de hand weg.
+    notitieBlijftStaan: schrijf.gelukt && !hersteld,
+    origineleNotities: origineel,
+    stappen,
+    ...rapport,
+  };
+};
+
+/**
  * Handvat voor de console van de service worker.
  *
  * Berichten via `chrome.runtime.sendMessage` komen niet aan bij de extensie die
@@ -495,22 +1066,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return true;
 });
 
-// -----------------------------------------------------------------------------
-// Klik op het extensie-icoon — tijdelijk, tot het paneel er is
-// -----------------------------------------------------------------------------
-
-chrome.action.onClicked.addListener(async () => {
-  const check = assertRedirectUri();
-  console.log('[ACC Form Stamper] callback-URL:', check.actual, check.ok ? '(komt overeen)' : '(WIJKT AF)');
-
-  try {
-    if (await auth.isSignedIn()) {
-      console.log('[ACC Form Stamper] al aangemeld');
-      return;
-    }
-    await auth.signIn();
-    console.log('[ACC Form Stamper] aanmelden gelukt');
-  } catch (error) {
-    console.error('[ACC Form Stamper] aanmelden mislukt:', error);
-  }
-});
+// De `chrome.action.onClicked`-listener die hier stond, meldde aan bij een klik
+// op het icoon. Die klik opent nu de popup, en dan vuurt `onClicked` niet meer —
+// aanmelden gebeurt via de knop op stap 1.

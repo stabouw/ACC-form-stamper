@@ -95,22 +95,42 @@ van het ontwerp is daarmee van tafel. Ten tweede is `getRowId` letterlijk
 `e => e.uid`, en de eerste sleutel is exact de GUID uit de adresbalk van
 formulier #309. **`uid` is dus de formulier-id die de publieke API verwacht.**
 
-De selectie staat op id, niet op rij-index. Sorteren of doorbladeren breekt de
+De selectie staat op id, niet op rij-index. Sorteren en doorbladeren breken de
 koppeling dus niet.
+
+### De selectie overleeft het doorbladeren — bevestigd
+
+**Waargenomen op 27-07-2026:** 200 aangevinkte formulieren, opgebouwd over vier
+pagina's van 50, kwamen alle 200 in het paneel terecht.
+
+Dit punt is twee keer van standpunt gewisseld en dat is het vermelden waard.
+Eerst stond het hier als gevolgtrekking uit de paginagrootte, met de
+kanttekening dat het niet apart gemeten was. Bij het bouwen werd op grond van
+één waarneming aangenomen dat doorbladeren de selectie juist wíst, en is de hele
+documentatie in die richting omgezet. Dat bleek onjuist zodra het werkelijk
+geprobeerd werd.
+
+Wat daarvan te leren valt: één waarneming is geen meting, ook niet als hij de
+andere kant op wijst dan de aanname. De oorspronkelijke gevolgtrekking klopte.
+
+Er is dus **geen bovengrens** aan een selectie. De tool verwerkt hem in blokken
+van 20 (de grens van `relationships:intersect`) en hoeft verder nergens rekening
+mee te houden.
 
 ### Lees de selectie uit `rowSelection`, niet uit `getSelectedRowModel()`
 
 `data.length` is 50 en `pagination.pageSize` is óók 50: de tabel houdt alleen de
-huidige pagina vast, de rest zit nog op de server. `getSelectedRowModel()` kan
-dus alleen rijen teruggeven die nu geladen zijn, terwijl `getState().rowSelection`
-de sleutels van álle aangevinkte formulieren bewaart — ook die van een pagina
-waar je inmiddels vanaf bent.
+huidige pagina vast. `getSelectedRowModel()` kan dus alleen rijen teruggeven die
+nu geladen zijn, terwijl `getState().rowSelection` de sleutels van álle
+aangevinkte formulieren bewaart — ook die van een pagina waar je inmiddels vanaf
+bent. Bij 200 formulieren over vier pagina's geeft het rijmodel er 50 terug,
+zonder ergens te melden dat er 150 ontbreken.
 
-Neem daarom de **sleutels van `rowSelection`** als bron: dat zijn de formulier-id's
-en meer heeft de tool niet nodig. Gebruik `getSelectedRowModel()` hooguit om er
-namen bij te tonen. Controleer dit bij het bouwen met een selectie over twee
-pagina's — het is een gevolgtrekking uit de paginagrootte, niet iets wat we
-apart gemeten hebben.
+Neem daarom de **sleutels van `rowSelection`** als bron: dat zijn rechtstreeks
+de formulier-id's, want `getRowId` is `e => e.uid`.
+
+Let op het filteren op waarde: TanStack laat een sleutel op `false` staan als je
+hem weer uitvinkt, dus `Object.keys()` alleen telt uitgevinkte formulieren mee.
 
 ### De rij draagt meer dan alleen id's
 
@@ -291,8 +311,43 @@ Twee dingen die het ontwerp raken:
 
 - **De `projectId` verschilt van die van Data Management.** Het `b.`-voorvoegsel
   moet eraf: `b.a4be0c34a-4ab7` wordt `a4be0c34a-4ab7`.
-- **PDF-formulieren worden niet ondersteund.** Uit de selectie filteren, met een
-  melding in het voorbeeldscherm.
+- **PDF-formulieren wérken wel — de referentie heeft het mis.** Gemeten op
+  27-07-2026: `PATCH notes` op een PDF-formulier slaagt, het teruglezen bevestigt
+  de tekst, en het terugzetten slaagt ook. Zie hieronder.
+
+### PDF-formulieren zijn gewoon te stempelen
+
+**Bewezen op 27-07-2026** met `stamper.probePdfForm()`, op formulier #313 in het
+testproject. De referentie zegt dat PDF-formulieren niet ondersteund worden op de
+`PATCH`; de ACC-interface sprak dat al tegen, want zo'n formulier heeft er gewoon
+een Formulierdetails-paneel met notitieveld en referentiesectie naast staan.
+
+Alle vier de stappen slaagden: `PATCH notes` → teruglezen (tekst stond er) →
+terugzetten → teruglezen (weer leeg). Ook `templateIdKlopt` was `true`, dus het
+`field-reports`-segment uit de URL is ook hier de `formTemplateId` die de `PATCH`
+in het pad wil.
+
+Daarmee is dit de derde ongedocumenteerde aanname die bij meting de andere kant
+op viel — na de uitleesbare selectie en het heropenen van gesloten formulieren.
+Het patroon is inmiddels duidelijk genoeg om niet meer op de referentie alleen
+af te gaan bij dit soort beperkingen.
+
+**Herkennen kan wel, en is nodig voor iets anders.** De twee soorten formulieren
+verschillen in precies één veld, en ze sluiten elkaar uit:
+
+| Veld | PDF-formulier | Gewoon formulier |
+|---|---|---|
+| `pdfFile` | aanwezig | afwezig |
+| `nativeForm` | afwezig | aanwezig |
+
+Filteren hoeft dus niet meer, maar het onderscheid blijft bruikbaar: bij een
+PDF-formulier staat het notitieveld sowieso niet op het formulier zelf, en dat is
+precies waar de verplichte uitleg over **Filters → Opmerkingen** over gaat.
+
+**Let op: `notes` kan `null` zijn.** Bij het PDF-formulier stond er `null`, bij
+het gewone formulier `""`. Allebei leeg, maar niet hetzelfde type. Overal
+`form.notes ?? ''` gebruiken — `splitNotes` en `buildStampedNotes` doen dat al,
+maar een vergelijking als `notes === ''` zou hierop stukgaan.
 
 ### De 8000 tekens kloppen
 

@@ -159,6 +159,29 @@ export class FormaClient {
   }
 
   /**
+   * The project's own record, for its name.
+   *
+   * Purely cosmetic — the panel shows the name so the user can see which project
+   * they are about to stamp. Reading it off the ACC page is not an option: the
+   * header markup is not ours and changes without notice.
+   *
+   * @param {object} params
+   * @param {string} params.projectId
+   * @param {AbortSignal} [params.signal]
+   * @returns {Promise<{id: string, name: string}>}
+   */
+  async getProject({ projectId, signal } = {}) {
+    return this._request(
+      'GET',
+      `${HOST}/construction/admin/v1/projects/${normalizeProjectId(projectId)}`,
+      // De Admin-API routeert per regio. Zonder deze header zoekt hij het project
+      // op de US-tenant en meldt hij netjes dat het niet bestaat — een 404 die op
+      // een rechtenprobleem lijkt terwijl het een adresprobleem is.
+      { region: true, signal, context: 'het ophalen van de projectnaam' },
+    );
+  }
+
+  /**
    * Every form matching the filter, paging until exhausted.
    *
    * @param {object} params  Same as listForms, minus offset.
@@ -186,7 +209,8 @@ export class FormaClient {
    * carried over from the listing — a form id on its own is not enough to
    * write. In v2 that field is `formTemplateId`.
    *
-   * PDF forms cannot be updated at all; filter them out before calling.
+   * The reference claims PDF forms cannot be updated. Measured on 27-07-2026:
+   * they can. Do not filter them out — see docs/api-notes.md.
    *
    * @param {object} params
    * @param {string} params.projectId

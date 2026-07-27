@@ -1,0 +1,246 @@
+/*
+ * Overgenomen uit docs/design_handoff_form_stamper/screens/.
+ *
+ * Die vijf bestanden dragen alle vijf hetzelfde stijlblok, letterlijk hetzelfde.
+ * Hier staat het één keer. Waarden zijn niet "ongeveer" overgenomen maar exact:
+ * de handoff noemt kleur, type en ruimte definitief.
+ *
+ * Wat erbij is gekomen, staat onder "Toestanden die de handoff niet tekent" en
+ * is terug te vinden in docs/design-decisions.md.
+ */
+
+@font-face{font-family:"Heijmans Normal";src:url("./fonts/Heijmans-Normal.otf") format("opentype");font-weight:400;font-style:normal}
+@font-face{font-family:"Heijmans Normal";src:url("./fonts/Heijmans-NormalItalic.otf") format("opentype");font-weight:400;font-style:italic}
+@font-face{font-family:"Heijmans Light";src:url("./fonts/Heijmans-Light.otf") format("opentype");font-weight:300;font-style:normal}
+@font-face{font-family:"Heijmans Bold Condensed";src:url("./fonts/Heijmans-BoldCon.otf") format("opentype");font-weight:700;font-style:normal}
+@font-face{font-family:"Heijmans Bold Condensed";src:url("./fonts/Heijmans-BoldConItalic.otf") format("opentype");font-weight:700;font-style:italic}
+@font-face{font-family:"Heijmans Black Condensed";src:url("./fonts/Heijmans-BlackCon.otf") format("opentype");font-weight:900;font-style:normal}
+
+:root{
+  --hjm-yellow:#feb900;--hjm-blue:#003366;--hjm-red:#ed0500;--hjm-white:#fff;
+  --hjm-grey-light:#b4c5cc;--hjm-grey-pale:#e6e6e5;--hjm-navy-dark:#111f39;
+  --hjm-tertiary-blue-pale:#e7edf9;
+  --hjm-font-display:"Heijmans Bold Condensed","Arial Narrow",sans-serif;
+  --hjm-font-ui:"Heijmans Normal","Aptos",sans-serif;
+}
+
+/*
+ * 420px is de breedte van de popup zelf, niet van een kaart óp een pagina. In de
+ * mockups staat de popup gecentreerd op een grijze achtergrond; hier ís de popup
+ * het venster, dus geen marge, geen schaduw, geen rand.
+ */
+/*
+ * 600px is zo hoog als een browser een popup laat worden. Door die hoogte vast
+ * te pakken in plaats van mee te laten groeien, is er zoveel mogelijk tabel
+ * zichtbaar zonder dat het venster zelf gaat scrollen.
+ *
+ * De hele popup is één kolom: kop, stapetiket, paneel, knoppenbalk. Alleen het
+ * paneel rekt mee (`flex:1`), en daarbinnen scrollt alleen de lijst. `min-height:0`
+ * is daarbij geen detail — zonder dat weigert een flex-kind te krimpen onder zijn
+ * inhoud en duwt de tabel de knoppenbalk het scherm af.
+ */
+body{
+  margin:0;width:420px;height:600px;background:#fff;
+  display:flex;flex-direction:column;overflow:hidden;
+  font-family:"Heijmans Light","Aptos","Segoe UI",system-ui,sans-serif;
+}
+section{display:flex;flex-direction:column;flex:1;min-height:0}
+a{color:var(--hjm-blue)}
+a:hover{color:#001f3f}
+
+/* ---------------------------------------------------------------- chrome --- */
+
+.status-bar{background:var(--hjm-yellow);padding:13px 15px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0}
+.status-bar h1{font-family:var(--hjm-font-display);font-weight:700;font-size:16px;color:var(--hjm-blue);margin:0;line-height:1.1;white-space:nowrap}
+
+/*
+ * De projectnaam hoort bij de titel, niet bij stap 2: hij zegt waar je bent, en
+ * dat blijft in alle vier de stappen gelden. `min-width:0` laat de naam krimpen
+ * in plaats van het icoon weg te duwen.
+ */
+.title-group{display:flex;align-items:baseline;gap:8px;min-width:0}
+.title-group .project{
+  font-size:11px;color:var(--hjm-blue);opacity:.75;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.icon-badge{width:21px;height:21px;border-radius:50%;background:var(--hjm-blue);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.icon-badge svg{width:12px;height:12px}
+.step-label{padding:9px 15px;font-size:10.5px;font-weight:700;color:var(--hjm-blue);opacity:.55;border-bottom:1px solid var(--hjm-grey-pale);background:#fafafa}
+
+/*
+ * De kop en de introregels scrollen niet mee — alleen de lijst eronder. Vandaar
+ * dat `.panel` zelf niet scrollt en `.scroll` dat wel doet.
+ */
+.panel{padding:14px 15px;display:flex;flex-direction:column;flex:1;min-height:0}
+.panel h2{font-family:var(--hjm-font-display);font-size:14px;font-weight:700;color:var(--hjm-blue);margin:0 0 3px}
+.hint{font-size:11px;color:var(--hjm-blue);opacity:.6;margin:0 0 11px;line-height:1.4}
+.hint.strong{font-weight:700;opacity:.8;margin-bottom:2px}
+.hint.tight{margin-bottom:6px}
+
+/* Alles boven dit blok staat vast; alleen hier wordt gescrold. */
+.scroll{flex:1;min-height:0;overflow-y:auto}
+
+.nav-row{display:flex;justify-content:space-between;align-items:center;padding:11px 15px 15px;flex-shrink:0}
+button.primary{font-family:inherit;font-size:12px;font-weight:700;background:var(--hjm-blue);color:#fff;border:none;border-radius:999px;padding:8px 17px;cursor:pointer}
+button.ghost{font-family:inherit;font-size:12px;font-weight:700;background:transparent;color:var(--hjm-blue);border:none;cursor:pointer}
+
+/*
+ * Uitgeschakeld is lichtblauw, niet doorzichtig. De handoff is daar expliciet
+ * over: `opacity` maakt ook de tekst vaag en dan is niet meer te lezen wát er
+ * niet kan.
+ */
+button.primary:disabled{background:var(--hjm-grey-light);cursor:default}
+button:disabled{cursor:default}
+
+/* ----------------------------------------------------------- selecteren --- */
+
+.toggle-box{display:flex;align-items:center;gap:10px;background:var(--hjm-tertiary-blue-pale);border-radius:10px;padding:10px 11px;margin-bottom:13px}
+.toggle-box .switch{width:32px;height:18px;border-radius:999px;background:var(--hjm-grey-light);position:relative;flex-shrink:0;border:none;padding:0;cursor:pointer;transition:background .12s}
+.toggle-box .switch::after{content:"";position:absolute;width:13px;height:13px;border-radius:50%;background:#fff;top:2.5px;left:2.5px;transition:left .12s}
+.toggle-box .switch[aria-checked="true"]{background:var(--hjm-blue)}
+.toggle-box .switch[aria-checked="true"]::after{left:16.5px}
+.toggle-box .t{font-size:11px;color:var(--hjm-blue);line-height:1.35;flex:1}
+.toggle-box .t strong{display:block;font-size:12px;margin-bottom:1px}
+
+/*
+ * `border-collapse:separate` en niet `collapse`: bij een samengevouwen rand hoort
+ * de rand aan de tabel en niet aan de cel, en dan blijft hij bij een meescrollende
+ * kop achter terwijl de kop meegaat. De onderrand komt daarom uit `box-shadow`.
+ */
+table.diff-table{width:100%;border-collapse:separate;border-spacing:0;font-size:10.3px}
+
+/*
+ * De kop is dof door de tekstkleur, níét door `opacity`. Dat was de fout:
+ * `opacity` geldt voor het hele element, dus ook voor de witte achtergrond —
+ * waardoor de rijen er dwars doorheen te lezen waren tijdens het scrollen.
+ */
+table.diff-table th{
+  text-align:left;font-weight:400;color:rgba(0,51,102,.55);padding:5px 9px 5px 5px;
+  position:sticky;top:0;background:#fff;z-index:2;
+  box-shadow:inset 0 -1px 0 var(--hjm-grey-pale);
+}
+table.diff-table td{padding:7px 9px 7px 5px;border-bottom:1px solid #f2f2f0;vertical-align:top;color:var(--hjm-blue)}
+table.diff-table td:last-child,table.diff-table th:last-child{padding-right:5px}
+
+.status{font-size:9px;font-weight:700;padding:2px 7px;border-radius:999px;white-space:nowrap}
+/*
+ * "nieuw" is groen: er komt iets bij waar nog niets stond. Hetzelfde groen als
+ * het vinkje op stap 3, zodat geslaagd overal dezelfde kleur heeft.
+ */
+.status.new{background:#dff0e6;color:#2f6b4a}
+.status.upd{background:#fae7aa;color:var(--hjm-blue)}
+.status.skip{background:var(--hjm-grey-pale);color:#6b6a64}
+.status.warn{background:#fce2e2;color:var(--hjm-red)}
+
+.warn-flag{display:flex;align-items:center;gap:6px;background:#fce2e2;color:var(--hjm-red);font-size:9.5px;font-weight:700;padding:4px 8px;border-radius:6px;margin-top:6px}
+.warn-flag svg{width:11px;height:11px;flex-shrink:0}
+
+/* ------------------------------------------------------------ stempelen --- */
+
+.run-item{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid var(--hjm-grey-pale)}
+.run-item .dot{width:17px;height:17px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.run-item .dot.done{background:#4a9b6e}
+.run-item .dot.pending{background:transparent;border:2px dashed var(--hjm-grey-light)}
+.run-item .dot.err{background:var(--hjm-red)}
+.run-item .dot svg{width:9px;height:9px}
+.run-item .txt{font-size:11.5px;color:var(--hjm-blue);flex:1;line-height:1.3}
+.run-item .txt .sub{display:block;font-size:9.5px;opacity:.6}
+
+/* --------------------------------------------------------- samenvatting --- */
+
+.journal-row{padding:9px 0;border-bottom:1px solid var(--hjm-grey-pale)}
+.journal-row .jh{display:flex;justify-content:space-between;align-items:center;margin-bottom:2px}
+.journal-row .jname{font-size:11.5px;font-weight:700;color:var(--hjm-blue)}
+.journal-row .jwhen{font-size:9.5px;color:#8a8880}
+.journal-row .jmeta{font-size:10.5px;color:var(--hjm-blue);opacity:.7}
+.undo-btn{font-size:10px;font-weight:700;color:var(--hjm-blue);background:var(--hjm-tertiary-blue-pale);border:none;border-radius:999px;padding:4px 10px;cursor:pointer;margin-top:6px}
+
+/* ======================================================================== */
+/* Toestanden die de handoff niet tekent — zie docs/design-decisions.md      */
+/* ======================================================================== */
+
+[hidden]{display:none !important}
+
+/*
+ * Punt 3: een gesloten formulier krijgt een gele pill ónder de naam. Geel en
+ * niet rood: gesloten is geen fout, het is iets om te weten voordat je de
+ * schakelaar omzet.
+ */
+.pill-closed{display:inline-block;margin-left:7px;font-size:8.5px;font-weight:700;padding:2px 7px;border-radius:999px;background:var(--hjm-yellow);color:var(--hjm-blue);white-space:nowrap;vertical-align:1px}
+
+/*
+ * Punt 4: geen gekoppelde assets. Geel, in de assetkolom zelf. Krijgt een
+ * scherpere tekst als er wél een assetregel stond die nu leeggemaakt wordt —
+ * dat is namelijk het geval waarin er echt iets verandert.
+ */
+.note-empty{display:flex;align-items:center;gap:6px;background:#fff4d6;color:#7a5a00;font-size:9.5px;font-weight:700;padding:4px 8px;border-radius:6px}
+.note-empty svg{width:11px;height:11px;flex-shrink:0}
+
+/* Geen assets én niets te doen: vermelden, niet waarschuwen. */
+.geen-assets{color:var(--hjm-blue);opacity:.45;font-style:italic}
+
+/* "en N andere" — de volledige lijst hangt in de tooltip. */
+.meer{opacity:.6;cursor:help;text-decoration:underline dotted;text-underline-offset:2px}
+
+/*
+ * Punt 5: "past niet" is geen waarschuwing maar een weigering, en krijgt daarom
+ * de rode `warn`-pill terwijl "ingekort" bij de mildere gele blijft.
+ */
+.status.stop{background:#fce2e2;color:var(--hjm-red)}
+
+/* De 8000-tekenmelding hangt onder de assetkolom, net als in de mockup. */
+.limit-note{display:flex;align-items:center;gap:6px;font-size:9.5px;font-weight:700;padding:4px 8px;border-radius:6px;margin-top:6px}
+.limit-note.shortened{background:#fae7aa;color:#6b4e00}
+.limit-note.blocked{background:#fce2e2;color:var(--hjm-red)}
+.limit-note svg{width:11px;height:11px;flex-shrink:0}
+
+/* Losse regels in de schakelaaruitleg; zonder dit lopen ze aan elkaar vast. */
+.toggle-box .t-line{display:block;margin-top:3px}
+
+/*
+ * Nul geselecteerd. Lichtrood vlak achter rode tekst — als kleur alleen was het
+ * te makkelijk te missen, en dit is precies het geval waarin de gebruiker iets
+ * moet doen voordat er iets kan gebeuren.
+ */
+.hint.empty{
+  display:inline-block;
+  background:#fce2e2;color:var(--hjm-red);
+  opacity:1;font-weight:700;
+  padding:3px 10px;border-radius:999px;
+}
+
+/* Foutregel op Inloggen — het open punt uit UX-FLOW.md, punt 1. */
+.error-line{background:#fce2e2;color:var(--hjm-red);font-size:10.5px;font-weight:700;line-height:1.4;padding:8px 10px;border-radius:6px;margin-bottom:11px}
+
+/*
+ * Verrijken heeft geen eigen scherm (punt 2): de tabel vult zich blok voor blok.
+ * Dit is de regel die zegt hoe ver dat is, plus de belofte dat er nog niets is
+ * geschreven — precies waar iemand bij een lange wachttijd onzeker over wordt.
+ */
+.loading-line{display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--hjm-blue);opacity:.7;padding:9px 0}
+.spinner{width:12px;height:12px;border:2px solid var(--hjm-grey-pale);border-top-color:var(--hjm-blue);border-radius:50%;flex-shrink:0;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spinner{animation-duration:2.4s}}
+
+/* Het formulier dat nú aan de beurt is. */
+.run-item .dot.busy{background:transparent;border:2px solid var(--hjm-grey-light)}
+.run-item.actief .txt{font-weight:700}
+
+/*
+ * Punt 6: de tekst die onder het blok stond is weg. Achteraf, op de regel van
+ * het formulier waar het gebeurde — niet als algemene waarschuwing vooraf.
+ */
+.lost-text{display:block;margin-top:4px;background:#fff4d6;color:#7a5a00;font-size:9px;font-weight:700;padding:3px 7px;border-radius:5px}
+
+/* Een teruggedraaide uitvoering blijft staan, maar is geen knop meer. */
+.journal-row.undone .jmeta{opacity:.45}
+.undo-done{display:inline-block;margin-top:6px;font-size:9.5px;color:#8a8880}
+
+/* ------------------------------------------------------------- dialoog --- */
+
+.overlay{position:fixed;inset:0;background:rgba(17,31,57,.45);display:flex;align-items:center;justify-content:center;padding:20px;z-index:10}
+.dialog{background:#fff;border-radius:0;padding:15px;width:100%;box-shadow:0 6px 24px rgba(0,0,0,.24)}
+.dialog h3{font-family:var(--hjm-font-display);font-size:14px;font-weight:700;color:var(--hjm-blue);margin:0 0 6px}
+.dialog p{font-size:11px;color:var(--hjm-blue);line-height:1.45;margin:0 0 10px}
+.dialog-warn{background:#fce2e2;color:var(--hjm-red);font-weight:700;padding:8px 10px;border-radius:6px}
+.dialog-buttons{display:flex;justify-content:flex-end;align-items:center;gap:6px}

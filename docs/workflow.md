@@ -70,7 +70,8 @@ De markering bevat een datum, dus:
 1. **Selectie** — de gebruiker vinkt formulieren aan in ACC Build zelf; de
    extensie leest de sleutels van `table.getState().rowSelection` uit de
    TanStack-tabel. Dat zijn de formulier-id's, en ze overleven sorteren en
-   doorbladeren. Bewezen met `poc/selection-probe`.
+   doorbladeren. Bewezen met `poc/selection-probe`, en bevestigd met een
+   selectie van 200 formulieren over vier pagina's.
 2. **Verrijken** — per formulier de gekoppelde assets ophalen via de
    Relationship API (`relationships:intersect`, batches van maximaal 20),
    daarna assetnamen en categorie-id's via `GET assets`, en categorie-id's naar
