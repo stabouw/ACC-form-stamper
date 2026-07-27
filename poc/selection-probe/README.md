@@ -65,6 +65,29 @@ Waar het rapport op uit is:
   GUID's bevatten. Als de lijst via een aanroep binnenkomt die we kunnen
   meelezen, hebben we de id's zonder de DOM aan te raken.
 
+## Uitkomst (27-07-2026): de selectie is uitleesbaar
+
+Met drie formulieren aangevinkt:
+
+```
+getRowId:      e => e.uid
+rowSelection:  { "50c78619-…": true, "acfab999-…": true, "811d1deb-…": true }
+selectedRows:  count 3
+```
+
+De rij-id ís de `uid`, en die `uid` is de GUID uit de formulier-URL — dus de
+formulier-id die de publieke API verwacht. Beide vragen waarvoor dit
+meetinstrument gebouwd is, zijn daarmee beantwoord. Route 1 (React props /
+tabelinstantie) uit de lijst hieronder is de route.
+
+Eén ding voor de echte extensie: **lees de sleutels van
+`table.getState().rowSelection`, niet `getSelectedRowModel()`.** De tabel houdt
+maar één pagina van 50 rijen vast; de selectiestatus overleeft het doorbladeren,
+het rijmodel niet.
+
+De rest van dit document beschrijft het meetinstrument zoals het bedoeld was, en
+blijft staan omdat de probe bruikbaar blijft als ACC zijn lijst verbouwt.
+
 ## Wat we tot nu toe weten
 
 Uit de eerste meting (26-07-2026, `acc.autodesk.eu`, route
@@ -72,20 +95,18 @@ Uit de eerste meting (26-07-2026, `acc.autodesk.eu`, route
 
 - De formulierenlijst is een **TanStack Table**. De rij-objecten staan in
   `table.options.data`.
-- Per rij zijn aanwezig: `uid` (v4 GUID, vermoedelijk de formulier-id), `type`
-  (v5 GUID, vermoedelijk de template-id — twee rijen met hetzelfde
-  formuliertype deelden deze waarde, en de template-id's in
-  `BatchFormCreator` zijn eveneens v5), plus `pg_form.id` en
-  `pg_form.layoutId`.
+- Per rij zijn aanwezig: `uid` (de formulier-id, inmiddels bewezen), `type`
+  (de template-id — twee rijen met hetzelfde formuliertype deelden deze
+  waarde), plus `pg_form.id` en `pg_form.layoutId`. Die laatste twee zijn
+  PlanGrid-intern: `pg_form.id` is wat de API `nativeForm.id` noemt.
 - De `projectId` zit in de props én in de URL.
 - De selectievakjes in de kop tellen mee als "aangevinkt": de kopregel meldt
   `aria-checked="mixed"` bij een gedeeltelijke selectie. Bij 2 geselecteerde
   formulieren vond de probe er 3. Die moet er dus uit gefilterd worden — of we
   vermijden de DOM helemaal en lezen de tabelinstantie.
 
-Nog te bevestigen: dat `uid` daadwerkelijk de formulier-id is die de publieke
-API verwacht. Open één formulier in ACC en vergelijk de GUID in de adresbalk met
-de `uid` uit het rapport.
+~~Nog te bevestigen: dat `uid` daadwerkelijk de formulier-id is die de publieke
+API verwacht.~~ Bevestigd — zie bovenaan.
 
 ## Hoe dit verder gaat
 

@@ -10,7 +10,13 @@
  */
 
 import { ApsAuth } from './aps/auth.js';
-import { FormaClient, FORM_DOMAIN, FORM_TYPE, normalizeProjectId } from './aps/forma.js';
+import {
+  FormaClient,
+  FORM_DOMAIN,
+  FORM_TYPE,
+  STATUS_V2_TO_V1,
+  normalizeProjectId,
+} from './aps/forma.js';
 import { ApsError } from './aps/errors.js';
 import { buildCategoryIndex, buildStampedNotes, formatAsset, stampChanged } from './stamp.js';
 import { APS_CLIENT_ID, ACC_REGION, assertRedirectUri } from './config.js';
@@ -87,7 +93,8 @@ async function findForm(projectId, formId) {
  * Dit is de kern van het voorbeeldscherm uit de UX: huidige notities naast
  * voorgestelde notities, en verder niets.
  */
-handlers.previewStamp = async ({ projectId, formId }) => {
+handlers.previewStamp = async (payload) => {
+  const { projectId, formId } = withUrl(payload);
   const form = await findForm(projectId, formId);
 
   const perForm = await forma.findAssetIdsForForms({
@@ -130,7 +137,8 @@ handlers.previewStamp = async ({ projectId, formId }) => {
  * aanrichten. Geeft de oude notities terug — bewaar die als je wilt kunnen
  * terugdraaien, want de tool houdt nog geen journaal bij.
  */
-handlers.writeStamp = async ({ projectId, formId, bevestig = false }) => {
+handlers.writeStamp = async (payload) => {
+  const { projectId, formId, bevestig = false } = withUrl(payload);
   const preview = await handlers.previewStamp({ projectId, formId });
 
   if (!bevestig) {
@@ -251,6 +259,197 @@ handlers.probeRelationships = async ({ projectId, limit = 10 }) => {
 };
 
 /**
+ * Haalt de id's uit een ACC-formulier-URL.
+ *
+ * De adresbalk van een geopend formulier draagt alle drie de id's die de
+ * schrijfaanroep nodig heeft:
+ *
+ *   https://acc.autodesk.eu/build/forms/projects/<projectId>/field-reports/<templateId>/reports/<formId>
+ *
+ * Dat scheelt overtypen én een lijstaanroep. De `projectId` staat er zonder
+ * `b.`-voorvoegsel in, wat precies is wat de Forms- en Assets-API willen.
+ *
+ * @param {string} url
+ * @returns {{projectId: string, templateId?: string, formId?: string}}
+ */
+export function parseFormUrl(url) {
+  const project = /\/projects\/(b\.)?([0-9a-f-]{36})/i.exec(url);
+  if (!project) {
+    throw new ApsError(
+      'client',
+      'Geen project-id in deze URL. Verwacht een adres uit ACC Build, ' +
+        'zoiets als .../build/forms/projects/<id>/field-reports/<sjabloon>/reports/<formulier>',
+    );
+  }
+
+  const report = /\/field-reports\/([0-9a-f-]{36})\/reports\/([0-9a-f-]{36})/i.exec(url);
+
+  return {
+    projectId: project[2],
+    templateId: report?.[1],
+    formId: report?.[2],
+  };
+}
+
+/**
+ * Vult ontbrekende id's aan uit een meegegeven `url`.
+ *
+ * Zo mag elke handler hieronder óf losse id's krijgen, óf een geplakte URL.
+ * Expliciet meegegeven id's winnen altijd van wat er in de URL staat.
+ */
+function withUrl({ url, ...rest }) {
+  if (!url) return rest;
+  const uit = parseFormUrl(url);
+  return { ...uit, ...Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined)) };
+}
+
+/**
+ * De openstaande vraag uit `api-notes.md`: kan een gesloten formulier via de API
+ * heropend worden?
+ *
+ * De referentie zegt dat gesloten formulieren "no longer editable" zijn, maar
+ * niet of dat óók voor het statusveld zelf geldt. Dat is alleen met een echte
+ * aanroep uit te maken, dus doet deze probe precies dat — op één testformulier,
+ * en met alle tussenstappen in het rapport.
+ *
+ * Wat er gebeurt:
+ *
+ *   1. formulier lezen (v2) en de status vertalen naar v1
+ *   2. PATCH status → `draft`; lukt dat niet, dan nog een poging met `in_review`
+ *   3. opnieuw lezen — wat de PATCH teruggeeft is niet hetzelfde als wat er staat
+ *   4. optioneel de notities patchen, om te zien of het formulier écht bewerkbaar is
+ *   5. weer sluiten (`submitted`), en opnieuw lezen
+ *
+ * Stap 5 is de tweede reden om dit te draaien: in het rapport staan de rauwe
+ * formulierrecords van vóór en ná, dus daar is aan af te lezen of "gesloten
+ * door" en "gesloten op" bij het opnieuw sluiten overschreven worden. Die zorg
+ * uit `workflow.md` is nu nog een vermoeden.
+ *
+ * Dit schrijft dus écht. Gebruik een wegwerpformulier, geen echte oplevering:
+ *
+ *   await stamper.probeReopen({ projectId: 'b.xxx', formId: 'yyy', bevestig: true })
+ *
+ * Loopt het halverwege vast, dan kan het formulier open blijven staan. Het
+ * rapport zegt dat er dan bij (`formulierBlijftOpen`).
+ */
+handlers.probeReopen = async (payload) => {
+  const {
+    projectId,
+    formId,
+    templateId: templateIdUitUrl,
+    bevestig = false,
+    testNotitie = false,
+    weerSluiten = true,
+  } = withUrl(payload);
+
+  const voor = await findForm(projectId, formId);
+  // Het formulierrecord is hier de bron, niet de URL: `formTemplateId` uit v2 is
+  // wat de v1-PATCH in het pad wil hebben. De URL-waarde dient als controle —
+  // lopen ze uiteen, dan klopt onze aanname over dat URL-segment niet.
+  const templateId = voor.formTemplateId;
+  const statusV1 = STATUS_V2_TO_V1[voor.status] ?? voor.status;
+  const templateIdKlopt = templateIdUitUrl ? templateIdUitUrl === templateId : undefined;
+
+  if (!bevestig) {
+    return {
+      geschreven: false,
+      reden: 'Geef bevestig: true mee. Deze probe wijzigt het formulier echt.',
+      formulier: { id: voor.id, formNum: voor.formNum, name: voor.name },
+      status: { v2: voor.status, v1: statusV1 },
+      templateId,
+      templateIdUitUrl,
+      templateIdKlopt,
+      bruikbaar: voor.status === 'closed',
+    };
+  }
+  if (voor.status !== 'closed') {
+    return {
+      geschreven: false,
+      reden:
+        `Formulier staat op "${voor.status}" en is dus niet gesloten. ` +
+        'Sluit eerst een testformulier in ACC — anders meet deze probe niets.',
+      status: { v2: voor.status, v1: statusV1 },
+    };
+  }
+
+  const stappen = [];
+
+  /** Voert één stap uit en houdt de fout vast in plaats van hem te laten vallen. */
+  const stap = async (naam, fn) => {
+    try {
+      const resultaat = await fn();
+      stappen.push({ stap: naam, gelukt: true, resultaat });
+      return { gelukt: true, resultaat };
+    } catch (error) {
+      stappen.push({
+        stap: naam,
+        gelukt: false,
+        status: error?.status,
+        melding: error?.message,
+        // De rauwe tekst van Autodesk is hier het interessantst: die zegt of het
+        // op de status stuit of op iets anders.
+        antwoord: typeof error?.detail === 'string' ? error.detail.slice(0, 500) : undefined,
+      });
+      return { gelukt: false, error };
+    }
+  };
+
+  const patchStatus = (status) =>
+    stap(`status → ${status}`, () =>
+      forma.updateForm({ projectId, templateId, formId, patch: { status } }),
+    );
+  const lees = (naam) => stap(naam, () => findForm(projectId, formId));
+
+  // 2. Heropenen — altijd naar `draft` (In Progress), nooit naar `in_review`.
+  //    De beoordelingsstap is een instelling van het sjabloon: staat die uit,
+  //    dan zetten we een formulier in een toestand die het sjabloon niet kent.
+  //    Lukt `draft` niet, dan is het antwoord "nee", niet "probeer wat anders".
+  await patchStatus('draft');
+
+  // 3. Wat de PATCH teruggeeft is niet per se wat er staat.
+  const naHeropenen = await lees('lezen na heropenen');
+  const werkelijkOpen =
+    naHeropenen.gelukt && ['inProgress', 'inReview'].includes(naHeropenen.resultaat.status);
+
+  // 4. Status terug op `draft` zegt nog niet dat de velden meedoen.
+  if (testNotitie && werkelijkOpen) {
+    const proef = `probe heropenen ${new Date().toISOString()}`;
+    await stap('notities patchen', () =>
+      forma.updateForm({ projectId, templateId, formId, patch: { notes: proef } }),
+    );
+    await stap('notities terugzetten', () =>
+      forma.updateForm({ projectId, templateId, formId, patch: { notes: voor.notes ?? '' } }),
+    );
+  }
+
+  // 5. Weer dichtdoen, en kijken wat dat met de sluitgegevens doet.
+  let na = naHeropenen;
+  if (weerSluiten && werkelijkOpen) {
+    await patchStatus('submitted');
+    na = await lees('lezen na sluiten');
+  }
+
+  const weerGesloten = na.gelukt && na.resultaat.status === 'closed';
+
+  return {
+    conclusie: werkelijkOpen
+      ? 'Heropenen kan. De optie "gesloten formulieren meenemen" blijft overeind.'
+      : 'Heropenen lukt niet via de API. De optie vervalt; filter gesloten formulieren weg.',
+    heropenen: {
+      gelukt: werkelijkOpen,
+      statusNaHeropenen: naHeropenen.gelukt ? naHeropenen.resultaat.status : undefined,
+    },
+    weerGesloten,
+    formulierBlijftOpen: werkelijkOpen && weerSluiten && !weerGesloten,
+    templateIdKlopt,
+    stappen,
+    // Voor en na naast elkaar: hier is af te lezen of "gesloten door"/"gesloten
+    // op" bij het opnieuw sluiten overschreven zijn.
+    records: { voor, na: na.gelukt ? na.resultaat : undefined },
+  };
+};
+
+/**
  * Handvat voor de console van de service worker.
  *
  * Berichten via `chrome.runtime.sendMessage` komen niet aan bij de extensie die
@@ -263,7 +462,12 @@ handlers.probeRelationships = async ({ projectId, limit = 10 }) => {
  *
  * Alleen bedoeld om handmatig te testen.
  */
-globalThis.stamper = { ...handlers, auth, forma };
+globalThis.stamper = { ...handlers, auth, forma, parseFormUrl };
+
+// Draait bij elke start van de service worker. Staat deze regel niet in de
+// console waar je `stamper` intikt, dan kijk je naar de verkeerde console —
+// die van de ACC-pagina bijvoorbeeld, en daar bestaat `stamper` niet.
+console.log('[ACC Form Stamper] service worker geladen —', Object.keys(handlers).join(', '));
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const handler = handlers[message?.type];

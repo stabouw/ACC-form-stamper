@@ -16,8 +16,9 @@ OAuth (PKCE), zodat de rechten van de gebruiker zelf gelden.
 
 ## Status
 
-Verkenning. Er wordt nog niets gestempeld, en er staat nog geen productiecode
-in deze repo.
+Verkenning afgerond, bouwen kan beginnen. De twee metingen die het ontwerp
+konden omgooien zijn gedaan en vielen goed uit. Er wordt nog niets gestempeld
+op schaal — wel is één formulier met de hand gestempeld en teruggedraaid.
 
 | | |
 |---|---|
@@ -30,32 +31,30 @@ in deze repo.
 
 ## Waar het nu staat
 
-De hele opzet leunt op één ding: kan een extensie uitlezen welke formulieren de
-gebruiker heeft aangevinkt? Dat is niet gedocumenteerd door Autodesk en niet
-gegarandeerd houdbaar.
+De hele opzet leunde op twee dingen die geen van beide gedocumenteerd zijn door
+Autodesk. Op 27-07-2026 zijn ze allebei gemeten, en allebei gunstig.
 
-De eerste meting was gunstig. De formulierenlijst is een TanStack Table, en de
-rij-objecten bevatten `uid` (vermoedelijk de formulier-id) en `type`
-(vermoedelijk de template-id). Beide zijn nodig om een formulier te kunnen
-bijwerken, en beide staan er dus al.
+**De selectie is uitleesbaar, op formulier-id.** De formulierenlijst is een
+TanStack Table met `getRowId: e => e.uid`, en `getState().rowSelection` bevat de
+aangevinkte formulieren als GUID-sleutels. Diezelfde GUID staat in de adresbalk
+van het formulier en is wat de publieke API verwacht. De extensie hoeft de DOM
+dus niet aan te raken — het fragielste stuk van het plan is van tafel.
+
+**Gesloten formulieren kunnen heropend worden.** `submitted` → `draft` →
+notities → `submitted` werkt in één sessie. Wel met een prijs: het opnieuw
+sluiten overschrijft "gesloten door" en "gesloten op", en dát is niet terug te
+draaien. De optie blijft dus bestaan, maar standaard uit en met uitleg.
+
+Beide metingen staan met hun uitkomst in [`docs/api-notes.md`](docs/api-notes.md).
 
 ## Volgende stappen
 
-1. **Meting afronden.** Laad `poc/selection-probe` uitgepakt in Edge en draai
-   *Probe tabel* met een paar formulieren aangevinkt. Dat laat zien of
-   `getSelectedRowModel()` de selectie geeft. Zo ja, dan hoeft de extensie de
-   DOM niet aan te raken en is het meest fragiele stuk van het plan van tafel.
-2. **`uid` verifiëren.** Open één formulier in ACC en vergelijk de GUID in de
-   adresbalk met de `uid` uit het rapport. Er zitten meerdere id-achtige velden
-   in een rij, waaronder PlanGrid-interne sleutels.
-3. **Eén API-vraag beantwoorden.** De documentatie is ontsloten en verwerkt in
-   `api-notes.md`: de richting van de relatiezoekopdracht bleek geen probleem, en
-   het stempelveld `notes` heeft inderdaad een grens van 8000 tekens. Wat
-   overblijft is één vraag die je alleen met een testaanroep beantwoordt: kan een
-   gesloten formulier via de API heropend worden? Zo niet, dan vervalt die optie.
-4. **Kern eerst bouwen.** De stempellogica — het afgeschermde blok, het opbouwen
-   van categoriepaden, de afbouwladder bij 8000 tekens — hangt van geen van
-   bovenstaande af en is los te schrijven en te testen.
-
-De volgorde is niet vrijblijvend: valt stap 1 tegen, dan verandert de vorm van
-de tool, maar stap 4 blijft in alle gevallen overeind.
+1. **Kern bouwen.** De stempellogica — het afgeschermde blok, het opbouwen van
+   categoriepaden, de afbouwladder bij 8000 tekens — hangt nergens meer van af.
+2. **Selectie doorgeven.** Een content script dat `rowSelection` uitleest en de
+   id's naar de service worker stuurt. Let op: lees de **sleutels van
+   `rowSelection`**, niet `getSelectedRowModel()` — de tabel houdt maar één
+   pagina van 50 vast, de selectie zelf overleeft het doorbladeren wel.
+3. **Paneel bouwen** volgens [`docs/ux-brief.md`](docs/ux-brief.md).
+4. **`BatchFormCreator` gelijktrekken** met het stempelformaat, zodat nieuwe en
+   bijgewerkte formulieren niet van elkaar te onderscheiden zijn voor een filter.

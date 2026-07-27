@@ -115,7 +115,18 @@ await forma.setFormNotes({ projectId, templateId, formId, notes });
 
 ## Nog niet gebouwd
 
-Het heropenen van gesloten formulieren. Of dat via de API kan, is nog niet
-vastgesteld — zie de openstaande vraag in `api-notes.md`. `updateForm` accepteert
-wel een `status` in de patch, dus zodra het antwoord er is, is er geen nieuwe
-methode voor nodig.
+Het heropenen van gesloten formulieren. Dát het kan, is bewezen met
+`stamper.probeReopen` in `background.js` (27-07-2026); de volgorde is
+`status: 'draft'` → `notes` → `status: 'submitted'`. Er is geen aparte methode
+voor nodig — `updateForm` accepteert een `status` in de patch.
+
+Drie dingen om erbij te weten:
+
+- **Heropen naar `draft`, nooit naar `in_review`.** Die tussenstap moet in het
+  sjabloon aangezet zijn.
+- **Het opnieuw sluiten overschrijft `lastSubmittedAt`, `lastSubmittedBy` en
+  `lastStatusChanges.closed`.** Onherstelbaar. Het journaal kan notities en
+  status terugzetten, deze velden niet.
+- **Het antwoord van de v1-`PATCH` is geen v2-record.** Andere statuswaarden,
+  `formTemplate` in plaats van `formTemplateId`. Lees na een schrijfactie
+  opnieuw via v2 als je het record nodig hebt.

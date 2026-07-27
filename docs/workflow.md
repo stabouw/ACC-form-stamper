@@ -68,8 +68,9 @@ De markering bevat een datum, dus:
 ## Stappen
 
 1. **Selectie** — de gebruiker vinkt formulieren aan in ACC Build zelf; de
-   extensie leest die selectie. Zie `poc/selection-probe` — dit moet eerst
-   bewezen worden.
+   extensie leest de sleutels van `table.getState().rowSelection` uit de
+   TanStack-tabel. Dat zijn de formulier-id's, en ze overleven sorteren en
+   doorbladeren. Bewezen met `poc/selection-probe`.
 2. **Verrijken** — per formulier de gekoppelde assets ophalen via de
    Relationship API (`relationships:intersect`, batches van maximaal 20),
    daarna assetnamen en categorie-id's via `GET assets`, en categorie-id's naar
@@ -99,25 +100,35 @@ De markering bevat een datum, dus:
 
 ### Waarom gesloten formulieren standaard uit staan
 
-Gesloten formulieren zijn niet te bewerken, maar kunnen met de juiste rechten
-heropend, aangepast en opnieuw gesloten worden. Bij dat opnieuw sluiten worden
-"gesloten door" en "gesloten op" hoogstwaarschijnlijk overschreven met de
-uitvoerende gebruiker en de datum van vandaag. Het stempelen zelf is
-onschuldig; het herschrijven van die historie over honderden formulieren is dat
-niet. Vandaar een expliciete keuze per run.
+Gesloten formulieren zijn niet te bewerken, maar kunnen heropend, aangepast en
+opnieuw gesloten worden — dat is op 27-07-2026 tegen de echte API bewezen. De
+route is `submitted` → `draft` → `PATCH notes` → `submitted`, en die werkt in één
+sessie.
+
+Heropen altijd naar `draft`, nooit naar `in_review`: die tussenstap is een
+instelling van het sjabloon, en staat die uit dan zet je het formulier in een
+toestand die het sjabloon niet kent.
+
+Bij het opnieuw sluiten worden "gesloten door" en "gesloten op" **daadwerkelijk**
+overschreven met de uitvoerende gebruiker en het moment van nu — dat was een
+vermoeden en is nu gemeten. Diezelfde run raakt ook `lastSubmittedAt`,
+`lastSubmittedBy` en `lastReopenedBy`. **Geen van die velden is terug te zetten.**
+
+Daarmee heeft dit een zwaardere consequentie dan alleen "even bevestigen": het
+stempelen zelf is onschuldig en volledig terug te draaien, maar zodra gesloten
+formulieren meedoen, is een deel van de run onomkeerbaar. Over honderden
+formulieren is dat het herschrijven van de opleverhistorie. Vandaar de expliciete
+keuze per run — en die keuze moet dit ook zeggen, niet alleen een aantal noemen.
 
 ## Open punten
 
 Zie `api-notes.md` voor de API-kant in detail. In het kort:
 
-- **Kan een gesloten formulier via de API heropend worden?** Het ontwerp gaat
-  ervan uit van wel. De referentie zegt dat gesloten formulieren "no longer
-  editable" zijn, zonder te vermelden of dat ook voor het statusveld zelf geldt.
-  Werkt het niet, dan vervalt de hele optie "gesloten formulieren meenemen" —
-  en daarmee ook de zorg hieronder over "gesloten door". Eén testformulier
-  volstaat om dit te beslissen.
 - **Ongedaan maken en status.** Zet een terugdraaiactie ook de status terug, of
-  alleen de notities?
+  alleen de notities? Nu bekend is dat heropenen werkt, is dit een echte keuze
+  geworden. De meting wijst één kant op: het terugdraaien kan de status wél
+  herstellen, maar de sluitgegevens niet. Een gebruiker de indruk geven dat hij
+  "alles" terugdraait is dus misleidend, hoe je het ook bouwt.
 - **Tekst onder de markering.** Typt een gebruiker iets ónder het blok, dan gaat
   dat verloren bij de volgende run. Bewust geaccepteerd, maar het hoort in de
   gebruikersuitleg.

@@ -57,25 +57,84 @@ twee is niet de asset zelf". Dat moeten wij ook doen.
 `autodesk-construction-form` (type `form`), `autodesk-construction-markup`. De
 oude flow negeert markups, issues en forms bij het overnemen van referenties.
 
-**Template-id's zijn v5-UUID's.** De voorbeeldwaarden in de flowtrigger
-(`d9be8f31-513b-5457-…`, `1b28dcfe-ecd7-599a-…`) hebben versienibble 5. Handige
-controle: een v4-GUID is dus géén template-id.
+**Template-id's zijn niet altijd v5-UUID's.** De voorbeeldwaarden in de
+flowtrigger (`d9be8f31-513b-5457-…`, `1b28dcfe-ecd7-599a-…`) hebben versienibble
+5, en daar leek een handige controle in te zitten. Die gaat niet op: het
+sjabloon van formulier #309 is `b1e84fe6-e516-4e21-…`, een v4. Gebruik de
+versienibble dus niet om id's uit elkaar te houden.
 
-## Waargenomen (uit de selectie-probe, 26-07-2026)
+## Waargenomen (uit de selectie-probe, 26 en 27-07-2026)
 
 Route: `https://acc.autodesk.eu/build/forms/projects/<projectId>/field-reports/all`
 
 De lijst is een TanStack Table. Rij-objecten in `table.options.data`, met per
 rij minimaal:
 
-| Veld | Waarde | Vermoeden |
+| Veld | Waarde | Wat het is |
 |---|---|---|
-| `uid` | v4-GUID, uniek per rij | formulier-id |
-| `type` | v5-GUID, gedeeld door rijen van hetzelfde type | template-id |
-| `pg_form.id` | v4-GUID | PlanGrid-formulierdefinitie |
+| `uid` | v4-GUID, uniek per rij | **de formulier-id die de API verwacht** — bewezen |
+| `type` | GUID, gedeeld door rijen van hetzelfde type | template-id (aannemelijk, nog niet naast `formTemplateId` gelegd) |
+| `pg_form.id` | v4-GUID | PlanGrid-formulierdefinitie = `nativeForm.id` in v2 |
 | `pg_form.layoutId` | v4-GUID | PlanGrid-layout |
 
 `projectId` staat zowel in de React-props als in de URL.
+
+### De selectie is uitleesbaar, en op formulier-id
+
+Meting van 27-07-2026, met drie formulieren aangevinkt:
+
+```
+getRowId:        e => e.uid
+rowSelection:    { "50c78619-…": true, "acfab999-…": true, "811d1deb-…": true }
+selectedRows:    count 3
+```
+
+Twee dingen tegelijk bewezen. Ten eerste geeft `getSelectedRowModel()` de
+selectie, dus de extensie hoeft de DOM niet aan te raken — het fragielste stuk
+van het ontwerp is daarmee van tafel. Ten tweede is `getRowId` letterlijk
+`e => e.uid`, en de eerste sleutel is exact de GUID uit de adresbalk van
+formulier #309. **`uid` is dus de formulier-id die de publieke API verwacht.**
+
+De selectie staat op id, niet op rij-index. Sorteren of doorbladeren breekt de
+koppeling dus niet.
+
+### Lees de selectie uit `rowSelection`, niet uit `getSelectedRowModel()`
+
+`data.length` is 50 en `pagination.pageSize` is óók 50: de tabel houdt alleen de
+huidige pagina vast, de rest zit nog op de server. `getSelectedRowModel()` kan
+dus alleen rijen teruggeven die nu geladen zijn, terwijl `getState().rowSelection`
+de sleutels van álle aangevinkte formulieren bewaart — ook die van een pagina
+waar je inmiddels vanaf bent.
+
+Neem daarom de **sleutels van `rowSelection`** als bron: dat zijn de formulier-id's
+en meer heeft de tool niet nodig. Gebruik `getSelectedRowModel()` hooguit om er
+namen bij te tonen. Controleer dit bij het bouwen met een selectie over twee
+pagina's — het is een gevolgtrekking uit de paginagrootte, niet iets wat we
+apart gemeten hebben.
+
+### De rij draagt meer dan alleen id's
+
+Ook aanwezig per rij: `notes`, `status`, `name`, `report_num`,
+`lastStatusChanges`, `last_submitted_by`, `last_reopened_by` en
+`pg_form.layoutInfo`. Genoeg om een voorbeeldscherm mee te vullen zonder één
+API-aanroep.
+
+Doe dat niet zonder controle: dit is de cache van de ACC-UI, niet de bron. Voor
+het tonen prima, maar wat je schrijft hoort te leunen op wat de API teruggeeft.
+
+Twee valkuilen:
+
+- **De veldnamen zijn `snake_case`** (`report_num`, `created_by`,
+  `last_submitted_at`), terwijl `GET forms` v2 `camelCase` gebruikt
+  (`formNum`, `createdBy`). Dit is een derde vorm van hetzelfde formulier.
+- **`status` staat hier in v1-woorden** — `submitted` en `draft`, niet `closed`
+  en `inProgress`. De tabel praat dus de taal van de schrijfkant, niet die van
+  `GET forms` v2 waar we hem uit lezen.
+
+`pg_form.layoutInfo` is interessant voor de openstaande vraag of een sjabloon het
+notitieblok aan heeft staan: het zit hier gewoon in de rij. In het rapport is het
+afgekapt (`createIssuesAutomatically`, `description`, `hasSectionAssignees`), dus
+of er een veld voor het notitieblok in zit is nog niet te zien.
 
 ## Bewezen tegen de echte API (26-07-2026)
 
@@ -254,13 +313,79 @@ Toegestane waarden bij het patchen (v1): `draft`, `discarded`, `submitted`,
 status `inReview` in plaats van `in_review` — daar moet je bij het bouwen op
 letten. Zie ook de statustabel hieronder: v2 gebruikt weer andere waarden.
 
-**Openstaand risico.** Het ontwerp gaat ervan uit dat een gesloten formulier
-heropend kan worden met een status-`PATCH`. Geldt "no longer editable" ook voor
-het statusveld zelf, dan werkt die route niet en is heropenen via de API
-onmogelijk. Dat is niet uit de documentatie op te maken. Probeer het op één
-testformulier vóór de optie "gesloten formulieren meenemen" gebouwd wordt — zo
-niet, dan vervalt die optie, en daarmee ook de zorg over het overschrijven van
-"gesloten door".
+**Heropenen kan wél.** Gemeten op 27-07-2026, formulier #309 *test weather* in
+project `948dda3b`, met `stamper.probeReopen`:
+
+| Stap | Uitkomst |
+|---|---|
+| `PATCH status: submitted → draft` | gelukt; teruglezen geeft `inProgress` |
+| `PATCH notes` op het heropende formulier | gelukt |
+| `PATCH status: draft → submitted` | gelukt; teruglezen geeft `closed` |
+
+"No longer editable" slaat dus op de inhoud van een gesloten formulier, niet op
+het statusveld. De hele heen-en-terugweg werkt in één sessie, en daarmee blijft
+de optie *gesloten formulieren meenemen* overeind.
+
+**Heropen altijd naar `draft`, nooit naar `in_review`.** De beoordelingsstap is
+een instelling van het sjabloon. Staat die daar uit, dan zet je een formulier in
+een toestand die het sjabloon niet kent. `draft` (In Progress) bestaat altijd.
+Mislukt die overgang, dan is het antwoord "dit formulier kan niet heropend
+worden" — er is geen tweede route om te proberen.
+
+#### Het opnieuw sluiten herschrijft de sluitgeschiedenis — en dat is niet terug te draaien
+
+Dit was tot nu toe een vermoeden in `workflow.md`. Het klopt. Vóór en ná dezelfde
+run, op een formulier dat op 02-07 gesloten was:
+
+| Veld | Vóór | Ná |
+|---|---|---|
+| `lastStatusChanges.closed.at` | `2026-07-02T12:40:05` | `2026-07-27T03:50:18` |
+| `lastStatusChanges.closed.by` | de oorspronkelijke sluiter | **de uitvoerende gebruiker** |
+| `lastSubmittedAt` / `lastSubmittedBy` | idem | idem, overschreven |
+| `lastReopenedBy` | `null` | de uitvoerende gebruiker |
+
+Een terugdraaiactie kan de notities en de status herstellen, maar deze velden
+niet: er is geen manier om een sluitdatum terug te zetten. **"Alles is terug te
+draaien" geldt dus niet volledig zodra gesloten formulieren meedoen**, en dat
+hoort de gebruiker te weten vóór hij die schakelaar aanzet.
+
+Kleine troost: `lastReopenedBy` is een eigen veld van ACC. Het heropenen laat dus
+een spoor achter, ook al gaat de oorspronkelijke sluitdatum verloren.
+
+`lastStatusChanges` is bovendien bruikbaar: daar staat per status wanneer en door
+wie, plus `previousStatus`. Genoeg om in het journaal vast te leggen wat er stond
+voordat wij eraan kwamen.
+
+#### Twee dingen die terloops meekwamen
+
+**Het antwoord van de v1-`PATCH` heeft een andere vorm dan `GET forms` v2.** De
+vertaaltabel geldt dus in beide richtingen, en niet alleen voor de status:
+
+| v1 (`PATCH`-antwoord) | v2 (`GET`) |
+|---|---|
+| `status: "draft"` / `"submitted"` | `status: "inProgress"` / `"closed"` |
+| `formTemplate: { id, name, … }` | `formTemplateId` |
+| `weather: { … }` volledig | `weatherId` |
+| `customValues`, `tabularValues` | niet aanwezig |
+| — | `nativeForm`, `lastStatusChanges`, `updatedBy` |
+
+Lees dus nooit het antwoord van de `PATCH` alsof het een v2-record is.
+
+**`nativeForm` is de PlanGrid-kant.** `nativeForm.id` en `nativeForm.layoutId`
+zijn precies de `pg_form.id` en `pg_form.layoutId` uit de selectie-probe. Dat zijn
+dus interne sleutels, geen formulier-id — de id die de API wil is `id`, en die
+komt overeen met de GUID in de formulier-URL.
+
+**Let op: `notes` kan `null` zijn**, niet `""`. Op een formulier waar nog nooit
+iets in het notitieveld heeft gestaan, komt `null` terug. Altijd afvangen vóór er
+een string-bewerking op los gaat.
+
+**Bijwerking: het heropenen ververst de weerdata.** Bij dit formulier sprongen
+`weather.fetchedAt` en de `updatedAt` van elk uurblok naar het moment van
+heropenen. De waarden zelf bleven gelijk, maar dat is geen garantie: bij een
+formulier van maanden geleden kan ACC hier andere cijfers neerzetten dan er
+stonden. Voor sjablonen met weerdata is dat een extra reden om gesloten
+formulieren niet zomaar mee te nemen.
 
 ### Forms v2 — maar niet voor alles
 
@@ -337,11 +462,9 @@ uit de ontwerpfase.
 
 ## Nog te bevestigen
 
-- **`uid` is de formulier-id die de publieke API verwacht.** Er zijn meerdere
-  id-achtige velden per rij; `pg_*` wijst op PlanGrid-interne sleutels. Open één
-  formulier in ACC en vergelijk de GUID in de adresbalk met `uid`.
-- **Of een gesloten formulier via de API heropend kan worden.** Zie hierboven;
-  dit bepaalt of een van de ontwerpkeuzes overeind blijft.
+- **Of `type` uit de tabel de `formTemplateId` is.** Aannemelijk — rijen van
+  hetzelfde sjabloon delen de waarde — maar nog niet naast de `formTemplateId`
+  uit v2 gelegd. Eén vergelijking op één formulier volstaat.
 - **Of `GET forms` v2 stabiel genoeg is.** In de referentie staat die nog als
   "New - Beta" terwijl v1 al "Deprecated" heet. We bouwen op v2; houd er
   rekening mee dat het contract nog kan schuiven.
@@ -349,6 +472,11 @@ uit de ontwerpfase.
   zie hierboven.
 - ~~Of Forma Build op `notes` of op `description` zoekt.~~ **`notes`** — het
   filter *Opmerkingen* vindt een gestempeld formulier terug. Zie hierboven.
+- ~~Of een gesloten formulier via de API heropend kan worden.~~ **Ja** — bewezen
+  op 27-07-2026. Zie hierboven, inclusief wat het opnieuw sluiten kost.
+- ~~Of `uid` de formulier-id is die de publieke API verwacht.~~ **Ja** —
+  `getRowId` is `e => e.uid` en de sleutels van `rowSelection` zijn de GUID's uit
+  de formulier-URL's. Zie hierboven.
 
 Terzijde, uit de formulier-URL af te lezen:
 

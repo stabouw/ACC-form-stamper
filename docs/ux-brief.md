@@ -99,13 +99,25 @@ en moet dat hier blijken — niet drie schermen verderop.
 Bij 0 geselecteerd: vertel wat de gebruiker moet doen ("vink formulieren aan in
 de lijst"), en zet de knop uit in plaats van hem te verbergen.
 
-#### Openstaand: gesloten formulieren
+#### Gesloten formulieren
 
-Hier hoort een schakelaar *Gesloten formulieren meenemen* (standaard uit), met
-een bevestiging van het aantal. **Of dat technisch kan, is nog niet bekend** —
-zie `api-notes.md`. Ontwerp het scherm zo dat deze schakelaar er later bij kan,
-maar bouw hem nu niet. Kan het niet, dan filtert de tool gesloten formulieren
-stil weg en meldt dat in het voorbeeld.
+De schakelaar *Gesloten formulieren meenemen* (standaard uit) kan gebouwd worden:
+heropenen via de API werkt, gemeten op 27-07-2026.
+
+Maar hij vraagt meer dan een aantal bevestigen. Bij het opnieuw sluiten
+overschrijft ACC "gesloten door" en "gesloten op" met de uitvoerende gebruiker en
+het moment van nu, en **dat is niet terug te draaien** — ook niet door onze
+terugdraaiactie. Voor deze formulieren geldt uitgangspunt 4 hierboven dus maar
+half.
+
+Dat hoort te staan waar de keuze gemaakt wordt, in gewone taal:
+
+> Bij deze formulieren komt jouw naam en de datum van vandaag te staan als wie ze
+> heeft afgerond. Dat kan niet ongedaan gemaakt worden.
+
+Niet als waarschuwingsdriehoek naast de schakelaar, maar als de tekst die de
+schakelaar uitlegt. En in het voorbeeldscherm de gesloten rijen apart zichtbaar
+met hun aantal, zodat het bij de laatste klik nog een keer langskomt.
 
 ---
 
@@ -176,7 +188,7 @@ is sowieso nodig.
 | Geen assets | Formulier heeft geen gekoppelde assets | Rij standaard **uit**; stempelen zou een lege lijst schrijven |
 | Bijna vol | Notities lopen tegen de 8000 tekens | Toon welke verkorting is toegepast (zie `workflow.md`) |
 | PDF-formulier | Niet te bewerken via de API | Rij uitgeschakeld, niet te selecteren |
-| Gesloten | Niet bewerkbaar in huidige status | Rij uitgeschakeld zolang de openstaande vraag niet beantwoord is |
+| Gesloten | Wordt heropend en weer gesloten | Rij uit tenzij de schakelaar aan staat; zichtbaar apart geteld, want hier gaat historie verloren |
 | Tekst onder het blok | Gaat verloren bij stempelen | Rij aan, maar zichtbaar gewaarschuwd |
 
 Die laatste is de enige waarbij de tool iets van de gebruiker weggooit. Maak dat
@@ -241,17 +253,20 @@ tweehonderd formulieren heeft gestempeld en twijfelt, moet niet hoeven zoeken.
 | **Terugdraaien** | Knop, primair | **Ja** | Voert uit |
 | **Annuleren** | Knop, secundair | **Ja** | Sluit de dialoog |
 
-**Openstaand ontwerpbesluit.** Als de run statussen heeft gewijzigd (formulieren
-heropend en weer gesloten), moet de gebruiker dan kiezen of het terugdraaien ook
-de status meeneemt, of doet de tool dat altijd? Twee kanten:
+**Ontwerpbesluit, nu de meting er is.** De status is terug te zetten, de
+sluitgegevens niet — "gesloten door" en "gesloten op" zijn bij het opnieuw
+sluiten al overschreven en blijven dat.
 
-- *Altijd meenemen* is eenvoudiger te begrijpen en herstelt de oorspronkelijke
-  toestand volledig.
-- *Laten kiezen* is eerlijker, want het opnieuw sluiten heeft "gesloten door"
-  mogelijk al overschreven en dát is niet terug te draaien.
+Daarmee valt de keuze weg: laat de gebruiker niet kiezen tussen twee soorten
+terugdraaien waarvan er één toch niet volledig is. De tool zet notities én status
+terug, en de dialoog zegt erbij wat er blijft staan:
 
-Deze vraag vervalt volledig als heropenen via de API niet blijkt te kunnen.
-Ontwerp de dialoog daarom zonder de keuze, en houd er ruimte voor.
+> De notities en de status gaan terug naar hoe ze waren. Wie de formulieren heeft
+> afgerond en wanneer, blijft staan zoals het nu is — dat is niet meer te
+> herstellen.
+
+Alleen tonen als de run gesloten formulieren heeft aangeraakt. Bij een gewone run
+is er niets onherstelbaars en hoort die zin er niet te staan.
 
 ### Dialoog B — Fout die de run blokkeert
 
@@ -277,8 +292,7 @@ Alles wat de tool ooit van de gebruiker vraagt:
 | Annuleren / stoppen | Verrijken, Uitvoeren | Nee | — |
 | Opnieuw proberen | Resultaat | Nee | — |
 | Terugdraaien | Resultaat + dialoog | Nee | — |
-| Omvang terugdraaien | Dialoog A | *Open* | *Open* |
-| Gesloten formulieren meenemen | Gereed | *Geparkeerd* | Uit |
+| Gesloten formulieren meenemen | Gereed | Nee | Uit |
 
 Dat is de hele lijst. Twee verplichte klikken in de gelukkige route: *Voorbeeld
 maken* en *Stempelen*. Wordt dat er meer, dan is er iets misgegaan in het
