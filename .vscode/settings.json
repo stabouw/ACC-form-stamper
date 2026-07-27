@@ -1,0 +1,5 @@
+{
+    "github-enterprise.uri": "https://heijmans.ghe.com/",
+    "github.codespaces.authProvider": "github-enterprise",
+    "chat.permissions.default": "autopilot"
+}
